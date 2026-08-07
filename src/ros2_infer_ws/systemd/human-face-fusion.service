@@ -1,0 +1,24 @@
+[Unit]
+Description=Human Face Fusion ROS2 Inference (headless)
+After=network-online.target systemd-udev-settle.service orbbec-camera.service
+Wants=network-online.target
+Requires=orbbec-camera.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=orinagx
+Group=orinagx
+WorkingDirectory=/home/orinagx/ros2_infer_ws
+Environment=HOME=/home/orinagx
+Environment=ROS_DOMAIN_ID=25
+Environment=SHOW_WINDOW=false
+ExecStart=/home/orinagx/ros2_infer_ws/scripts/start_human_face_fusion.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
