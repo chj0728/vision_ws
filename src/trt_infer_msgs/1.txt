@@ -1,0 +1,159 @@
+
+
+
+
+编译
+
+cd ~/ros2_infer_ws
+source /opt/ros/humble/setup.bash
+
+rm -rf build/ install/ log/
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+source install/setup.bash
+
+终端 1：相机
+
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=25
+export ROS_LOCALHOST_ONLY=0
+source ~/camera_ws/install/setup.bash
+
+
+ros2 launch orbbec_camera gemini2L.launch.py \
+  color_width:=1280 color_height:=720 color_fps:=30 color_format:=MJPG \
+  depth_width:=1280 depth_height:=800 depth_fps:=30 \
+  use_hardware_time:=false log_level:=info depth_registration:=true \
+  enable_ir:=false
+
+
+等节点起来、无报错后再开推理。
+
+
+
+
+
+
+
+
+终端 2：推理
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=25
+export ROS_LOCALHOST_ONLY=0
+source ~/ros2_infer_ws/install/setup.bash
+
+
+
+
+ros2 launch human_face_fusion_ros human_face_fusion_with_trt.launch.py \
+    model_path:=/home/orinagx/ros2_infer_ws/models/yolo26m_fp16.engine \
+    engine_path:=/home/orinagx/ros2_infer_ws/models/scrfd_2.5g_bnkps_shape640x640.trt \
+    image_topic:=/camera/color/image_raw \
+    depth_topic:=/camera/depth/image_raw \
+    head_pose_enable:=true \
+    head_pose_engine_path:=/home/orinagx/ros2_infer_ws/models/sixdrepnet_fp16.trt \
+    body_log_frame_timing:=true \
+    fusion_log_frame_timing:=true \
+    show_window:=true \
+    face_recog_enable:=true \
+    face_recog_engine_path:=/home/orinagx/ros2_infer_ws/models/w600k_r50_b16_gpu0_fp16.engine \
+    face_db_path:=/home/orinagx/ros2_infer_ws/data/face_db.sqlite3 \
+    gender_enable:=true \
+    gender_engine_path:=/home/orinagx/ros2_infer_ws/models/genderage.engine
+
+
+
+
+
+
+
+终端3
+查消息
+
+export ROS_DOMAIN_ID=25
+export ROS_LOCALHOST_ONLY=0
+source ~/ros2_infer_ws/install/setup.bash
+
+ros2 topic echo /human_face_fusion/scene_perception
+
+
+
+
+
+
+
+
+
+
+数据库
+
+sqlitebrowser ~/ros2_infer_ws/face_db.sqlite3
+
+
+
+```bash
+orinagx@ubuntu:~$ ros2 node list 
+/av_vision
+/camera/camera
+/camera/camera_container
+/chat_assistant_node
+/human_face_fusion_node
+/launch_ros_1094641
+/trt_infer_ros_node
+
+ros2 topic list
+/camera/color/camera_info
+/camera/color/image_raw
+/camera/depth/camera_info
+/camera/depth/image_raw
+/camera/depth_filter_status
+/camera/depth_to_color
+```
+
+```bash
+1094787 orinagx   20   0 2698540 228556  55268 S  88.4   0.4 214:08.06 component_conta                                                       
+1094643 orinagx   20   0   69.0g   2.2g 658864 S  55.6   3.5 144:27.93 python3                                                               
+1094871 orinagx   20   0   63.9g 632936 128884 S  31.8   1.0  78:47.17 trt_infer_ros_n                                                       
+1094873 orinagx   20   0   63.9g 791244 139744 S  23.8   1.2  66:24.23 human_face_fusi                                                       
+ 157994 orinagx   20   0 1461700 301364  58752 S  19.2   0.5 315:14.11 python3                                                               
+   6114 orinagx   20   0 4186372 440180 122272 S  17.5   0.7 203:08.28 gnome-shell                                                           
+1257943 orinagx   20   0   73.6g 407384  76764 S  13.2   0.6   1:01.18 node                                                                  
+ 183479 orinagx   20   0  257868  24196   9300 S   8.9   0.0 173:59.35 jtop                                                                  
+   2317 root      20   0  329632  16672   5168 S   5.6   0.0  88:56.24 jtop                                                                  
+   1959 orinagx   20   0   69.7g   1.4g 303956 S   5.0   2.4 128:28.93 chat_assistant_                                                       
+1265749 orinagx   20   0   18.7g 564376  96000 S   4.0   0.9   0:32.58 MainThread                                                            
+    830 root      20   0 1420556 121564  24556 S   3.3   0.2  52:30.56 tailscaled                                                            
+   3651 orinagx   20   0 2878068  26784  14668 S   3.0   0.0  95:54.27 pulseaudio  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

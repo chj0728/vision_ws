@@ -72,3 +72,4 @@ install/
 log/
 
 **models/
+**third_deps/

@@ -1,7 +1,0 @@
-# 根据 UUID 更新人脸数据库中的姓名（由状态机 / 语音模块调用）。
-# 融合节点收到后同步写入 SQLite 并更新内存镜像，后续帧消息中 person_name 即有值。
-string person_uuid    # 目标人物的 UUID v4
-string name           # 要写入的真实姓名
----
-bool   success
-string message        # "ok" 或错误描述
