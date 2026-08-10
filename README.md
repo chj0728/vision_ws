@@ -43,7 +43,28 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ros2 launch orbbec_camera gemini2L.launch.py \
 camera_name:=camera \
 depth_registration:=true \
-uvc_backend:=v4l2 \
 enable_ir:=false \
 enable_point_cloud:=false
+# uvc_backend:=v4l2
+```
+
+- ros2 topic list 查看话题
+
+```bash
+/camera/color/camera_info
+/camera/color/image_raw
+/camera/color/image_raw/compressed
+/camera/depth/camera_info
+/camera/depth/image_raw
+/camera/depth/image_raw/compressed
+/camera/depth/image_raw/compressedDepth
+/camera/depth/image_raw/theora
+/camera/depth_filters/status
+/camera/device_status
+```
+
+## 运行项目
+
+```bash
+ros2 launch trt_infer_ros start.launch.py 
 ```
