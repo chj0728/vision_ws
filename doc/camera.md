@@ -1,8 +1,71 @@
-# ROS 2 图像话题与压缩格式
+# 相机使用说明
 
-不同的 ROS 2 图像话题，主要区别在于**传输格式和压缩方式**：
+## 相机型号 Gemini 2 L
+
+### Install Dependencies
+
+```bash
+sudo apt install libgflags-dev nlohmann-json3-dev \
+ros-$ROS_DISTRO-image-transport ros-${ROS_DISTRO}-image-transport-plugins ros-${ROS_DISTRO}-compressed-image-transport \
+ros-$ROS_DISTRO-image-publisher ros-$ROS_DISTRO-camera-info-manager \
+ros-$ROS_DISTRO-diagnostic-updater ros-$ROS_DISTRO-diagnostic-msgs ros-$ROS_DISTRO-statistics-msgs ros-$ROS_DISTRO-xacro \
+ros-$ROS_DISTRO-backward-ros libdw-dev libssl-dev mesa-utils libgl1 libgoogle-glog-dev
+```
+
+### Clone && Build OrbbecSDK_ROS2
+
+```bash
+git clone https://github.com/orbbec/OrbbecSDK_ROS2.git
+cd OrbbecSDK_ROS2
+git checkout v2-main
+
+colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install
+```
+
+### 查看 Orbbec Description
+
+```bash
+source install/setup.bash
+ros2 launch orbbec_description view_model.launch.py model:=gemini_2_L.urdf.xacro
+```
+
+### 注册脚本（必需）
+
+```bash
+cd  .../OrbbecSDK_ROS2/orbbec_camera/scripts
+sudo bash install_udev_rules.sh
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+### 启动相机
+
+```bash
+ros2 launch orbbec_camera gemini2L.launch.py \
+camera_name:=camera \
+depth_registration:=true \
+enable_ir:=false \
+enable_point_cloud:=false
+# uvc_backend:=v4l2
+```
+
+- ros2 topic list 查看话题
+
+```bash
+/camera/color/camera_info
+/camera/color/image_raw
+/camera/color/image_raw/compressed
+/camera/depth/camera_info
+/camera/depth/image_raw
+/camera/depth/image_raw/compressed
+/camera/depth/image_raw/compressedDepth
+/camera/depth/image_raw/theora
+/camera/depth_filters/status
+/camera/device_status
+```
 
 ## 📊 话题对比
+
+不同的 ROS 2 图像话题，主要区别在于**传输格式和压缩方式**：
 
 ### 原始图像话题
 
