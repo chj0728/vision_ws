@@ -79,10 +79,12 @@ extract_and_install \
     "$ORBBEC_SRC" \
     "$ORBBEC_DIR" || exit 1
 
-# ===================== rcutils-humble-dev.zip 解压安装 =====================
-RCUTILS_ZIP="$THIRD_DIR/rcutils-humble-dev.zip"
+# ===================== rcutils-${ROS_DISTRO}-dev.zip 解压安装 =====================
+sudo apt install ros-${ROS_DISTRO}-mimick-vendor ros-${ROS_DISTRO}-performance-test-fixture
+
+RCUTILS_ZIP="$THIRD_DIR/rcutils-${ROS_DISTRO}-dev.zip"
 RCUTILS_SRC="$PROJECT_DIR/src/third_deps"
-RCUTILS_DIR="rcutils-humble-dev"
+RCUTILS_DIR="rcutils-${ROS_DISTRO}-dev"
 
 extract_and_install \
     "$RCUTILS_ZIP" \
