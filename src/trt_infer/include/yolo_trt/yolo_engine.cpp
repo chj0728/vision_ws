@@ -251,11 +251,19 @@ void YOLOEngine::loadEngine(const std::string& path) {
     f.seekg(0, std::ios::beg);
     std::vector<char> data(size);
     f.read(data.data(), size);
+    if (!f) throw std::runtime_error("Failed to read engine: " + path);
     f.close();
 
     runtime_.reset(nvinfer1::createInferRuntime(logger_));
+    if (!runtime_) throw std::runtime_error("Failed to create TensorRT runtime");
     engine_.reset(runtime_->deserializeCudaEngine(data.data(), size));
+    if (!engine_) {
+        throw std::runtime_error(
+            "Failed to deserialize TensorRT engine: " + path +
+            ". Rebuild the engine on this device with its installed TensorRT version.");
+    }
     context_.reset(engine_->createExecutionContext());
+    if (!context_) throw std::runtime_error("Failed to create TensorRT execution context: " + path);
 
     int nb = engine_->getNbIOTensors();
     buffers_.resize(nb);
