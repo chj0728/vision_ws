@@ -5,11 +5,51 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(rmw REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(trt_infer REQUIRED)
+find_package(trt_infer_msgs REQUIRED)
+
+add_library(trt_infer_ros_component SHARED
+  src/trr_infer_ros_component.cpp
+)
+target_compile_features(trt_infer_ros_component PUBLIC cxx_std_17)
+target_include_directories(trt_infer_ros_component PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(trt_infer_ros_component
+  cv_bridge
+  message_filters
+  OpenCV
+  rclcpp
+  rclcpp_components
+  rmw
+  sensor_msgs
+  trt_infer
+  trt_infer_msgs
+)
+rclcpp_components_register_nodes(trt_infer_ros_component "trt_infer_ros::TrtInferComponent")
+
+add_executable(trt_infer_ros_node src/trr_infer_ros_node.cpp)
+target_compile_features(trt_infer_ros_node PUBLIC cxx_std_17)
+target_link_libraries(trt_infer_ros_node trt_infer_ros_component)
+ament_target_dependencies(trt_infer_ros_node rclcpp)
+
+install(TARGETS
+  trt_infer_ros_component
+  trt_infer_ros_node
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY include/ DESTINATION include)
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 

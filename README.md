@@ -24,6 +24,20 @@
 
 ## 运行项目
 
+- 相机节点
+
+```bash
+ros2 launch trt_infer_ros trt_infer_camera.launch.py
+```
+
+- 推理节点
+
+```bash
+ros2 launch trt_infer_ros trt_infer_ros_node.launch.py use_composition:=False
+```
+
+### 运行所有节点
+
 ```bash
 ros2 launch trt_infer_ros start.launch.py 
 ```

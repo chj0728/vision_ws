@@ -34,9 +34,9 @@ def generate_launch_description():
         work_space_dir = os.path.dirname(os.path.dirname(trt_infer_ros_dir))
 
     # 创建带时间戳的日志目录
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
-        "%Y-%m-%d_%H-%M-%S"
-    )
+    timestamp = datetime.datetime.now(
+        tz=datetime.timezone(datetime.timedelta(hours=8))
+    ).strftime("%Y-%m-%d_%H-%M-%S")
 
     camera_log_dir = os.path.join(work_space_dir, "logs", "camera", timestamp)
     print("Camera log directory:", camera_log_dir)

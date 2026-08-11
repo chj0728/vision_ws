@@ -18,7 +18,17 @@ def generate_launch_description():
                     os.path.join(
                         get_package_share_directory("trt_infer_ros"),
                         "launch",
-                        "camera.launch.py",
+                        "trt_infer_camera.launch.py",
+                    )
+                )
+            ),
+            # ------------- trt_infer_ros trt_infer_ros.launch.py ----------------
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(
+                        get_package_share_directory("trt_infer_ros"),
+                        "launch",
+                        "trt_infer_ros_node.launch.py",
                     )
                 )
             ),
