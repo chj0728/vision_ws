@@ -69,21 +69,21 @@ enable_point_cloud:=false
 
 ### 原始图像话题
 
-| 话题 | 格式 | 用途 |
-| ------ | ---------- | ------ |
-| `/camera/color/image_raw` | 原始 RGB 图像（未压缩） | 本地处理、计算机视觉、高精度需求 |
-| `/camera/depth/image_raw` | 原始深度图（16-bit 单通道，单位 mm） | SLAM、点云生成、精确测距 |
+| 话题 | 消息类型 | 格式 | 用途 |
+| ------ | ---------- | ---------- | ------ |
+| `/camera/color/image_raw` | `sensor_msgs/Image` | 原始 RGB 图像（未压缩） | 本地处理、计算机视觉、高精度需求 |
+| `/camera/depth/image_raw` | `sensor_msgs/Image` | 原始深度图（16-bit 单通道，单位 mm） | SLAM、点云生成、精确测距 |
 
 ---
 
 ### 压缩图像话题
 
-| 话题 | 压缩格式 | 特点 |
-| ------ | ---------- | ------ |
-| `/camera/color/image_raw/compressed` | **JPEG/PNG** | 有损/无损压缩，兼容性好，网络传输常用 |
-| `/camera/depth/image_raw/compressed` | **PNG** | 无损压缩，保持深度精度 |
-| `/camera/depth/image_raw/compressedDepth` | **PNG + 深度专用编码** | 专为深度图优化的压缩，效率更高 |
-| `/camera/depth/image_raw/theora` | **Theora 视频编码** | 流式视频压缩，适合连续传输 |
+| 话题 | 消息类型 | 压缩格式 | 特点 |
+| ------ | ---------- | ---------- | ------ |
+| `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | **JPEG/PNG** | 有损/无损压缩，兼容性好，网络传输常用 |
+| `/camera/depth/image_raw/compressed` | `sensor_msgs/CompressedImage` | **PNG** | 无损压缩，保持深度精度 |
+| `/camera/depth/image_raw/compressedDepth` | `sensor_msgs/CompressedImage` | **PNG + 深度专用编码** | 专为深度图优化的压缩，效率更高 |
+| `/camera/depth/image_raw/theora` | `sensor_msgs/CompressedImage` | **Theora 视频编码** | 流式视频压缩，适合连续传输 |
 
 ---
 

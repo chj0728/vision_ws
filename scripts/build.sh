@@ -34,4 +34,4 @@ cd $PROJECT_DIR
 if [ "$1" == "pure" ]; then
     pure_build
 fi
-colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install
+colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON --symlink-install
