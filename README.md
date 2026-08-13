@@ -7,10 +7,10 @@
         <th>Platform</th><th>OS</th><th>CUDA/TensorRT</th><th>Support</th>
     </tr>
     <tr>
-        <td rowspan="2">X86_64</td><td rowspan="2">Ubuntu 22.04 + ROS2 Humble</td><td>CUDA 13.3 + TensorRT 11</td><td>✅</td>
+        <td rowspan="2">X86_64</td><td rowspan="2">Ubuntu 22.04 + ROS2 Humble</td><td>CUDA 13.3 + TensorRT 11.2.1</td><td>✅</td>
     </tr>
     <tr>
-        <td>CUDA 12.8 + TensorRT 11</td><td>✅</td>
+        <td>CUDA 12.8 + TensorRT 10.9.0</td><td>✅</td>
     </tr>
     <tr>
         <td>Jetson AGX Orin</td><td>Ubuntu 22.04 + ROS2 Humble</td><td>JetPack6.2</td><td>✅</td>

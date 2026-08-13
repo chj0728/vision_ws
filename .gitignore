@@ -70,6 +70,9 @@ Testing/
 
 install/
 log/
+Log/
 
-**models/
 **third_deps/
+
+*.trt
+*.engine
