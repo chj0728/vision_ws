@@ -44,6 +44,8 @@ ros2 launch trt_infer_ros trt_infer_camera.launch.py
 
 ```bash
 ros2 launch trt_infer_ros trt_infer_ros_node.launch.py use_composition:=False
+
+ros2 launch trt_infer_ros perception_ros_node.launch.py use_composition:=False
 ```
 
 ### 运行所有节点

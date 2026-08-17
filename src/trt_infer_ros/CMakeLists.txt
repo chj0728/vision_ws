@@ -24,9 +24,11 @@ find_package(rmw REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trt_infer REQUIRED)
 find_package(trt_infer_msgs REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
+# --------------- trt_infer_ros_component -------------------------
 add_library(trt_infer_ros_component SHARED
-  src/trr_infer_ros_component.cpp
+  src/trt_infer_ros_component.cpp
 )
 target_compile_features(trt_infer_ros_component PUBLIC cxx_std_17)
 target_include_directories(trt_infer_ros_component PUBLIC
@@ -46,20 +48,54 @@ ament_target_dependencies(trt_infer_ros_component
 )
 rclcpp_components_register_nodes(trt_infer_ros_component "trt_infer_ros::TrtInferComponent")
 
-add_executable(trt_infer_ros_node src/trr_infer_ros_node.cpp)
+add_executable(trt_infer_ros_node src/trt_infer_ros_node.cpp)
 target_compile_features(trt_infer_ros_node PUBLIC cxx_std_17)
 target_link_libraries(trt_infer_ros_node trt_infer_ros_component)
 ament_target_dependencies(trt_infer_ros_node rclcpp)
+# ---------------------------------------------------------------------
+
+# ------------------ perception_ros_component -------------------------
+add_library(perception_ros_component SHARED
+  src/perception_ros_component.cpp
+  src/perception_pipeline.cpp
+  src/pipeline/yolo_pipeline.cpp
+)
+target_compile_features(perception_ros_component PUBLIC cxx_std_17)
+target_include_directories(perception_ros_component PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(perception_ros_component
+  cv_bridge
+  message_filters
+  OpenCV
+  rclcpp
+  rclcpp_components
+  rmw
+  sensor_msgs
+  trt_infer
+  trt_infer_msgs
+  yaml-cpp
+)
+target_link_libraries(perception_ros_component yaml-cpp)
+rclcpp_components_register_nodes(perception_ros_component "perception_ros_component::PerceptionRosComponent")
+add_executable(perception_ros_node src/perception_ros_node.cpp)
+target_compile_features(perception_ros_node PUBLIC cxx_std_17)
+target_link_libraries(perception_ros_node perception_ros_component)
+ament_target_dependencies(perception_ros_node rclcpp)
+# ---------------------------------------------------------------------
 
 install(TARGETS
   trt_infer_ros_component
   trt_infer_ros_node
+  perception_ros_component
+  perception_ros_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY include/ DESTINATION include)
-
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

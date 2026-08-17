@@ -1,0 +1,19 @@
+yolo_pipeline:
+  yolo_engine_path: /home/caohaojie/ws/vision_ws/models/yolo/yolo26m_fp16.engine
+  conf_threshold: 0.45
+  max_distance_m: 5.0
+  depth_scale_to_meters: 0.001
+  min_depth_m: 0.08
+  max_depth_read_m: 25.0
+  only_human_class: true
+  distance_ema_enable: false
+  human_class_id: 0
+  depth_roi_y0: 0.52
+  depth_roi_y1: 0.98
+  depth_roi_x_margin: 0.2
+  depth_percentile: 0.5
+  depth_trim_close_ratio: 0.0
+  distance_ema_alpha: 0.35
+  bbox_coord_space: letterbox
+  engine_input_h: 0
+  engine_input_w: 0
