@@ -26,16 +26,8 @@ find_package(trt_infer REQUIRED)
 find_package(trt_infer_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
-# --------------- trt_infer_ros_component -------------------------
-add_library(trt_infer_ros_component SHARED
-  src/trt_infer_ros_component.cpp
-)
-target_compile_features(trt_infer_ros_component PUBLIC cxx_std_17)
-target_include_directories(trt_infer_ros_component PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(trt_infer_ros_component
+# 共用的 ROS 及推理依赖
+set(COMMON_COMPONENT_DEPENDENCIES
   cv_bridge
   message_filters
   OpenCV
@@ -46,45 +38,46 @@ ament_target_dependencies(trt_infer_ros_component
   trt_infer
   trt_infer_msgs
 )
+
+# 为组件统一设置语言标准、头文件路径和公共依赖
+function(configure_component target)
+  target_compile_features(${target} PUBLIC cxx_std_17)
+  target_include_directories(${target} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+  ament_target_dependencies(${target} ${COMMON_COMPONENT_DEPENDENCIES})
+endfunction()
+
+# ------------- trt_infer_ros_component -----------------------
+add_library(trt_infer_ros_component SHARED src/trt_infer_ros_component.cpp)
+configure_component(trt_infer_ros_component)
 rclcpp_components_register_nodes(trt_infer_ros_component "trt_infer_ros::TrtInferComponent")
 
 add_executable(trt_infer_ros_node src/trt_infer_ros_node.cpp)
 target_compile_features(trt_infer_ros_node PUBLIC cxx_std_17)
 target_link_libraries(trt_infer_ros_node trt_infer_ros_component)
 ament_target_dependencies(trt_infer_ros_node rclcpp)
-# ---------------------------------------------------------------------
+# -------------------------------------------------------------
 
-# ------------------ perception_ros_component -------------------------
+# --------- perception_ros_component -------------------------
 add_library(perception_ros_component SHARED
   src/perception_ros_component.cpp
   src/perception_pipeline.cpp
   src/pipeline/yolo_pipeline.cpp
 )
-target_compile_features(perception_ros_component PUBLIC cxx_std_17)
-target_include_directories(perception_ros_component PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(perception_ros_component
-  cv_bridge
-  message_filters
-  OpenCV
-  rclcpp
-  rclcpp_components
-  rmw
-  sensor_msgs
-  trt_infer
-  trt_infer_msgs
-  yaml-cpp
-)
+configure_component(perception_ros_component)
+ament_target_dependencies(perception_ros_component yaml-cpp)
 target_link_libraries(perception_ros_component yaml-cpp)
 rclcpp_components_register_nodes(perception_ros_component "perception_ros_component::PerceptionRosComponent")
+
 add_executable(perception_ros_node src/perception_ros_node.cpp)
 target_compile_features(perception_ros_node PUBLIC cxx_std_17)
 target_link_libraries(perception_ros_node perception_ros_component)
 ament_target_dependencies(perception_ros_node rclcpp)
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------
 
+# 安装组件库、可执行程序、头文件及运行配置
 install(TARGETS
   trt_infer_ros_component
   trt_infer_ros_node
@@ -100,13 +93,13 @@ install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
+
+  # 当前源码尚未统一添加版权与许可证头，因此暂时跳过对应检查
   set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
+
+  # cpplint 依赖 Git 仓库及完整的版权头，条件具备后可移除该设置
   set(ament_cmake_cpplint_FOUND TRUE)
+
   ament_lint_auto_find_test_dependencies()
 endif()
 
