@@ -9,6 +9,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/PersonPerception.msg"
   "msg/ScenePerceptionResult.msg"
   "srv/UpdatePersonName.srv"
+
+  "msg/BodyDetection.msg"
+  "msg/BoundingBox.msg"
+  "msg/FaceDetection.msg"
+  "msg/PerceptionResult.msg"
+  "msg/PersonMeta.msg"
+
   DEPENDENCIES std_msgs
 )
 
