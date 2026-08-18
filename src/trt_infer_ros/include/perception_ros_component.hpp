@@ -11,6 +11,7 @@
 #ifndef PERCEPTION_ROS_COMPONENT_HPP
 #define PERCEPTION_ROS_COMPONENT_HPP
 
+#include <mutex>
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
@@ -65,6 +66,20 @@ public:
    * @param depth_msg 
    */
   void onSyncedColorDepth(const Image::ConstSharedPtr& color_msg, const Image::ConstSharedPtr& depth_msg);
+
+  /**
+   * @brief 同步RGB和深度图像的处理函数，定时器回调
+   * 
+   */
+  void processLatestColorDepth();
+
+  /**
+   * @brief 处理RGB和深度图像，进行感知推理并发布结果
+   * 
+   * @param color_msg 
+   * @param depth_msg 
+   */
+  void processColorDepth(const Image::ConstSharedPtr& color_msg, const Image::ConstSharedPtr& depth_msg);
 
   /**
    * @brief 将字符串转换为小写
@@ -128,7 +143,7 @@ public:
 private:
 
   // config path
-  std::string config_path_;
+  std::string pipeline_config_path_;
 
   // Pointer to the perception pipeline
   std::unique_ptr<PerceptionPipeline> perception_pipeline_ptr_;
@@ -136,6 +151,7 @@ private:
   // synchronization parameters
   bool hard_sync_{false}; // Whether to use exact synchronization or approximate synchronization
   int sync_queue_size_{10}; // Queue size for message synchronization
+  double processing_rate_hz_{10.0}; // Processing rate in Hz for the timer callback
 
   // Publisher for perception results
   std::string perception_result_topic_;
@@ -148,6 +164,10 @@ private:
   message_filters::Subscriber<Image> depth_image_sub_;
   std::unique_ptr<message_filters::Synchronizer<ExactSyncPolicy>> sync_exact_;
   std::unique_ptr<message_filters::Synchronizer<ApproximateSyncPolicy>> sync_approx_;
+  Image::ConstSharedPtr latest_color_msg_;
+  Image::ConstSharedPtr latest_depth_msg_;
+  std::mutex latest_frames_mutex_;
+  rclcpp::TimerBase::SharedPtr processing_timer_;
 
   cv::Mat depth_f32_buf_;               // 
   float depth_scale_to_meters_{0.001f}; // 深度图像的缩放因子，将深度值从毫米转换为米

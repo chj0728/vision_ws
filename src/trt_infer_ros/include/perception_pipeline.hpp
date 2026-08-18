@@ -27,8 +27,10 @@ public:
     PerceptionPipeline(YAML::Node & config);
     ~PerceptionPipeline();
 
+    /**
+     * @brief 初始化感知模块
+     */
     void initialize();
-    // void run();
 
     /**
      * @brief 处理RGB和深度图像，生成感知结果

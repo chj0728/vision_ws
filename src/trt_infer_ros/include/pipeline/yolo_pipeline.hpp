@@ -3,6 +3,9 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include "trt_infer_msgs/msg/perception_result.hpp"
+using trt_infer_msgs::msg::PerceptionResult;
+
 class YOLOPipeline {
 public:
   YOLOPipeline(YAML::Node & config);
@@ -19,6 +22,15 @@ public:
    * @brief Initialize the YOLO pipeline with the loaded parameters.
    */
   void initialize();
+
+  /**
+   * @brief Process RGB and depth images using the YOLO engine.
+   * 
+   * @param rgb The input RGB image (cv::Mat).
+   * @param depth The input depth image (cv::Mat).
+   * @param perception_result The output perception result message to be filled with detection results.
+   */
+  void process(const cv::Mat& rgb, const cv::Mat& depth, PerceptionResult& perception_result);
 
 private:
   std::unique_ptr<YOLOEngine> yolo_engine_ptr_;

@@ -5,34 +5,15 @@ namespace perception_ros_component {
 PerceptionRosComponent::PerceptionRosComponent(const rclcpp::NodeOptions& options)
     : Node("perception_ros_component", options) {
 
-  loadParameters(); // Load parameters from YAML configuration file
-  
-  // Initialize the perception pipeline
-
-  // perception_pipeline_ptr_ = std::make_unique<PerceptionPipeline>();
-  // perception_pipeline_ptr_->initialize();
-  // RCLCPP_INFO(this->get_logger(), "Perception pipeline is initialized successfully.");
-
-  // // Declare and get parameters
-  // this->declare_parameter<bool>("hard_sync", false);
-  // this->declare_parameter<int>("sync_queue_size", 10);
-
-  // this->declare_parameter<std::string>("color_image_topic", "/camera/color/image_raw");
-  // this->declare_parameter<std::string>("depth_image_topic", "/camera/depth/image_raw");
-  // this->declare_parameter<std::string>("perception_result_topic", "/perception/result");
-
-  // hard_sync_ = this->get_parameter("hard_sync").as_bool();
-  // sync_queue_size_ = this->get_parameter("sync_queue_size").as_int();
-  // color_image_topic_ = this->get_parameter("color_image_topic").as_string();
-  // depth_image_topic_ = this->get_parameter("depth_image_topic").as_string();
-  // perception_result_topic_ = this->get_parameter("perception_result_topic").as_string();
+  // Load parameters from YAML configuration file
+  loadParameters();
 
   // Create publisher for perception results
-  perception_result_pub_ = create_publisher<trt_infer_msgs::msg::PerceptionResult>(perception_result_topic_, rclcpp::QoS(2).reliable());
+  perception_result_pub_ = create_publisher<trt_infer_msgs::msg::PerceptionResult>(perception_result_topic_, rclcpp::QoS(10).reliable());
 
   // Set up subscribers for RGB and depth images
   rclcpp::QoS image_qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default), rmw_qos_profile_default);
-  image_qos.keep_last(6);
+  image_qos.keep_last(10);
   const rmw_qos_profile_t qos_profile = image_qos.get_rmw_qos_profile();
   color_image_sub_.subscribe(this, color_image_topic_, qos_profile);
   depth_image_sub_.subscribe(this, depth_image_topic_, qos_profile);
@@ -49,38 +30,54 @@ PerceptionRosComponent::PerceptionRosComponent(const rclcpp::NodeOptions& option
     sync_approx_->registerCallback(
       std::bind(&PerceptionRosComponent::onSyncedColorDepth, this, std::placeholders::_1, std::placeholders::_2));
   }
+
+  // 设置定时器以处理最新的RGB和深度图像
+  const auto processing_period = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::duration<double>(1.0 / processing_rate_hz_));
+  processing_timer_ = create_wall_timer(
+    processing_period, std::bind(&PerceptionRosComponent::processLatestColorDepth, this));
   
-  RCLCPP_INFO(this->get_logger(), "PerceptionRosComponent is initialized successfully.");
+  RCLCPP_INFO(this->get_logger(), "[PerceptionRosComponent] is initialized successfully.");
 }
 
 PerceptionRosComponent::~PerceptionRosComponent() = default;
 
 void PerceptionRosComponent::loadParameters() {
-  // Load parameters from a YAML configuration file
-  this->declare_parameter<std::string>("config_path", "config/perception_config.yaml");
-  config_path_ = this->get_parameter("config_path").as_string();
 
+  // Load parameters from a YAML configuration file
+  this->declare_parameter<std::string>("pipeline_config_path", "pipeline.yaml");
+  pipeline_config_path_ = this->get_parameter("pipeline_config_path").as_string();
+  RCLCPP_INFO(this->get_logger(), "Loaded pipelines parameters from %s", pipeline_config_path_.c_str());
+
+  // Load parameters from the YAML file into the perception pipeline
   try {
-    YAML::Node config = YAML::LoadFile(config_path_);
+
+    YAML::Node config = YAML::LoadFile(pipeline_config_path_);
+
     perception_pipeline_ptr_ = std::make_unique<PerceptionPipeline>(config);
-    RCLCPP_INFO(this->get_logger(), "Loaded parameters from %s", config_path_.c_str());
+
   } catch (const std::exception& e) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to load parameters from %s: %s", config_path_.c_str(), e.what());
+    RCLCPP_ERROR(this->get_logger(), "[PerceptionPipelines] Failed to load parameters from %s: %s", pipeline_config_path_.c_str(), e.what());
   }
 
   // Declare and get parameters
   this->declare_parameter<bool>("hard_sync", false);
   this->declare_parameter<int>("sync_queue_size", 10);
+  this->declare_parameter<double>("processing_rate_hz", 10.0);
 
   this->declare_parameter<std::string>("color_image_topic", "/camera/color/image_raw");
   this->declare_parameter<std::string>("depth_image_topic", "/camera/depth/image_raw");
   this->declare_parameter<std::string>("perception_result_topic", "/perception/result");
 
-  hard_sync_ = this->get_parameter("hard_sync").as_bool();
-  sync_queue_size_ = this->get_parameter("sync_queue_size").as_int();
-  color_image_topic_ = this->get_parameter("color_image_topic").as_string();
-  depth_image_topic_ = this->get_parameter("depth_image_topic").as_string();
-  perception_result_topic_ = this->get_parameter("perception_result_topic").as_string();
+  hard_sync_          = this->get_parameter("hard_sync").as_bool();
+  sync_queue_size_    = this->get_parameter("sync_queue_size").as_int();
+  processing_rate_hz_ = this->get_parameter("processing_rate_hz").as_double();
+  if (processing_rate_hz_ <= 0.0) {
+    throw std::invalid_argument("processing_rate_hz must be greater than zero");
+  }
+  color_image_topic_        = this->get_parameter("color_image_topic").as_string();
+  depth_image_topic_        = this->get_parameter("depth_image_topic").as_string();
+  perception_result_topic_  = this->get_parameter("perception_result_topic").as_string();
 }
 
 bool PerceptionRosComponent::decodeToFloatMeters(const Image::ConstSharedPtr& depth_msg, cv::Mat& depth_meters) {
@@ -107,7 +104,37 @@ bool PerceptionRosComponent::decodeToFloatMeters(const Image::ConstSharedPtr& de
 void PerceptionRosComponent::onSyncedColorDepth(const Image::ConstSharedPtr& color_msg,
                         const Image::ConstSharedPtr& depth_msg) {
 
+  std::lock_guard<std::mutex> lock(latest_frames_mutex_);
+  latest_color_msg_ = color_msg;
+  latest_depth_msg_ = depth_msg;
+}
+
+void PerceptionRosComponent::processLatestColorDepth() {
+  Image::ConstSharedPtr color_msg;
+  Image::ConstSharedPtr depth_msg;
+  {
+    std::lock_guard<std::mutex> lock(latest_frames_mutex_);
+    color_msg = latest_color_msg_;
+    depth_msg = latest_depth_msg_;
+    latest_color_msg_.reset();
+    latest_depth_msg_.reset();
+  }
+
+  if (color_msg && depth_msg) {
+    processColorDepth(color_msg, depth_msg);
+  }
+}
+
+void PerceptionRosComponent::processColorDepth(const Image::ConstSharedPtr& color_msg,
+                                                const Image::ConstSharedPtr& depth_msg) {
+
   // const auto start_time = std::chrono::steady_clock::now();
+  
+  // Check if there are any subscribers for the perception result topic
+  if (perception_result_pub_->get_subscription_count() == 0) {
+    RCLCPP_WARN(this->get_logger(), "No subscribers for topic [%s], skipping processing.", perception_result_topic_.c_str());
+    return;
+  }
 
   // 检查消息是否为空
   if (!color_msg || !depth_msg) {
@@ -115,7 +142,7 @@ void PerceptionRosComponent::onSyncedColorDepth(const Image::ConstSharedPtr& col
     return;
   }
 
-  RCLCPP_INFO(this->get_logger(), "Received synchronized color and depth images.");
+  // RCLCPP_INFO(this->get_logger(), "Received synchronized color and depth images.");
 
   cv::Mat color_image_mat;
   
@@ -151,11 +178,8 @@ void PerceptionRosComponent::onSyncedColorDepth(const Image::ConstSharedPtr& col
   perception_result.image_height = static_cast<uint32_t>(color_image_mat.rows);
 
   perception_pipeline_ptr_->process(color_image_mat, depth_image_mat, perception_result);
+  perception_result_pub_->publish(perception_result);
 
-  // 发布感知结果，如果有订阅者
-  if (perception_result_pub_->get_subscription_count() > 0) {
-    perception_result_pub_->publish(perception_result);
-  }
 }
 
 } // namespace perception_ros_component

@@ -25,9 +25,13 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
-    config_path = PathJoinSubstitution(
-        [FindPackageShare("trt_infer_ros"), "config", "config.yaml"]
+    ros_config_path = PathJoinSubstitution(
+        [FindPackageShare("trt_infer_ros"), "config", "ros.yaml"]
     )
+    pipeline_config_path = PathJoinSubstitution(
+        [FindPackageShare("trt_infer_ros"), "config", "pipeline.yaml"]
+    )
+
     use_composition = LaunchConfiguration("use_composition")
 
     # 使用 COLCON_PREFIX_PATH 环境变量
@@ -78,6 +82,11 @@ def generate_launch_description():
                 description="Queue size for message synchronization.",
             ),
             DeclareLaunchArgument(
+                "processing_rate_hz",
+                default_value="1.0",
+                description="Maximum RGB-D processing rate in Hz.",
+            ),
+            DeclareLaunchArgument(
                 "color_image_topic",
                 default_value="/camera/rgb/image_color",
                 description="Color image topic.",
@@ -98,20 +107,10 @@ def generate_launch_description():
                         name="perception_ros_node",
                         output="screen",
                         parameters=[
+                            ros_config_path,
                             {
-                                "config_path": config_path.perform(
+                                "pipeline_config_path": pipeline_config_path.perform(
                                     launch.LaunchContext()
-                                ),
-                                "hard_sync": LaunchConfiguration("hard_sync"),
-                                "sync_queue_size": LaunchConfiguration(
-                                    "sync_queue_size"
-                                ),
-                                "yolo_engine_path": yolo_engine_path,
-                                "color_image_topic": LaunchConfiguration(
-                                    "color_image_topic"
-                                ),
-                                "depth_image_topic": LaunchConfiguration(
-                                    "depth_image_topic"
                                 ),
                             },
                         ],
@@ -126,29 +125,17 @@ def generate_launch_description():
                         condition=IfCondition(use_composition),
                         actions=[
                             LoadComposableNodes(
-                                target_container="perception_ros_node_container",
+                                target_container="/camera/camera_container",
                                 composable_node_descriptions=[
                                     ComposableNode(
                                         package="trt_infer_ros",
-                                        plugin="trt_infer_ros::PerceptionRosNode",
+                                        plugin="perception_ros_component::PerceptionRosComponent",
                                         name="perception_ros_node",
                                         parameters=[
+                                            ros_config_path,
                                             {
-                                                "config_path": config_path.perform(
+                                                "pipeline_config_path": pipeline_config_path.perform(
                                                     launch.LaunchContext()
-                                                ),
-                                                "hard_sync": LaunchConfiguration(
-                                                    "hard_sync"
-                                                ),
-                                                "sync_queue_size": LaunchConfiguration(
-                                                    "sync_queue_size"
-                                                ),
-                                                "yolo_engine_path": yolo_engine_path,
-                                                "color_image_topic": LaunchConfiguration(
-                                                    "color_image_topic"
-                                                ),
-                                                "depth_image_topic": LaunchConfiguration(
-                                                    "depth_image_topic"
                                                 ),
                                             },
                                         ],

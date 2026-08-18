@@ -1,0 +1,8 @@
+/perception_ros_node:
+  ros__parameters:
+    color_image_topic: /camera/rgb/image_color
+    depth_image_topic: /camera/depth/image
+    perception_result_topic: /perception_result
+    hard_sync: false
+    sync_queue_size: 10
+    processing_rate_hz: 10.0
