@@ -4,5 +4,6 @@
     depth_image_topic: /camera/depth/image
     perception_result_topic: /perception_result
     hard_sync: false
-    sync_queue_size: 10
+    sync_queue_size: 1
     processing_rate_hz: 10.0
+    color_bbox_topic: /camera/color/bbox
