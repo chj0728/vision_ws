@@ -5,6 +5,15 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# 默认从“工作空间/src/当前包”反推工作空间根目录，也可通过
+# -DTRT_WORKSPACE_ROOT=/path/to/workspace 在配置阶段覆盖。
+get_filename_component(DEFAULT_WORKSPACE_ROOT
+  "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE
+)
+set(TRT_WORKSPACE_ROOT "${DEFAULT_WORKSPACE_ROOT}" CACHE PATH
+  "Path to the ROS 2 workspace root"
+)
+
 find_package(ament_cmake REQUIRED)
 
 # cv_bridge 查找 OpenCV 前必须锁定与当前平台兼容的系统版本
@@ -69,6 +78,10 @@ add_library(perception_ros_component SHARED
 configure_component(perception_ros_component)
 ament_target_dependencies(perception_ros_component yaml-cpp)
 target_link_libraries(perception_ros_component yaml-cpp)
+# 将工作空间路径作为字符串宏传给需要加载模型的源文件
+target_compile_definitions(perception_ros_component PRIVATE
+  TRT_WORKSPACE_ROOT="${TRT_WORKSPACE_ROOT}"
+)
 rclcpp_components_register_nodes(perception_ros_component "perception_ros_component::PerceptionRosComponent")
 
 add_executable(perception_ros_node src/perception_ros_node.cpp)

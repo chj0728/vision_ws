@@ -4,17 +4,22 @@ PerceptionPipeline::PerceptionPipeline(YAML::Node &config) : config_(config) {
 
   initialize();
 
-  std::cout << "[PerceptionPipelines] is initialized successfully."
-            << std::endl;
+  std::cout << "[All PerceptionPipelines]" << std::endl;
+  std::cout << "|--> initialized successfully." << std::endl;
+  std::cout << "|____________________________" << std::endl;
 }
 
 PerceptionPipeline::~PerceptionPipeline() = default;
 
 void PerceptionPipeline::initialize() {
 
-  // Initialize the YOLO pipeline with the loaded parameters
+  // Initialize the YOLO pipeline
   yolo_pipeline_ptr_ = std::make_unique<YOLOPipeline>(config_);
-  std::cout << "[YOLOPipeline] is initialized successfully." << std::endl;
+  std::cout << "[YOLOPipeline]:" << std::endl;
+  std::cout << "|-->loaded engine from: " << yolo_pipeline_ptr_->getEnginePath()
+            << std::endl;
+  std::cout << "|--> is initialized successfully." << std::endl;
+  std::cout << "|____________________________" << std::endl;
 }
 
 void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,

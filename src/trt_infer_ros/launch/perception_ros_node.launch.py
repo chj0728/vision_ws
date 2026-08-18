@@ -52,11 +52,11 @@ def generate_launch_description():
     log_dir = os.path.join(work_space_dir, "logs", "perception_ros_node", timestamp)
     print("perception_ros_node log directory:", log_dir)
 
-    models_dir = os.path.join(work_space_dir, "models")
-    print("models directory:", models_dir)
+    # models_dir = os.path.join(work_space_dir, "models")
+    # print("models directory:", models_dir)
 
-    yolo_engine_path = os.path.join(models_dir, "yolo26m_fp16.engine")
-    print("yolo engine path:", yolo_engine_path)
+    # yolo_engine_path = os.path.join(models_dir, "yolo26m_fp16.engine")
+    # print("yolo engine path:", yolo_engine_path)
 
     return launch.LaunchDescription(
         [  # -------------- 全局环境变量设置（影响所有后续节点）------------------
@@ -64,38 +64,38 @@ def generate_launch_description():
             SetEnvironmentVariable(name="ROS_LOG_DIR", value=log_dir),
             SetEnvironmentVariable(
                 name="RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                value="[{severity}][{time}]-[{name}-{line_number}]: {message}",
+                value="[{severity}][{time}]-[{function_name}:{line_number}]: {message}",
             ),
             DeclareLaunchArgument(
                 "use_composition",
                 default_value="True",
                 description="Whether to use component composition.",
             ),
-            DeclareLaunchArgument(
-                "hard_sync",
-                default_value="False",
-                description="Whether to use exact synchronization.",
-            ),
-            DeclareLaunchArgument(
-                "sync_queue_size",
-                default_value="10",
-                description="Queue size for message synchronization.",
-            ),
-            DeclareLaunchArgument(
-                "processing_rate_hz",
-                default_value="1.0",
-                description="Maximum RGB-D processing rate in Hz.",
-            ),
-            DeclareLaunchArgument(
-                "color_image_topic",
-                default_value="/camera/rgb/image_color",
-                description="Color image topic.",
-            ),
-            DeclareLaunchArgument(
-                "depth_image_topic",
-                default_value="/camera/depth/image",
-                description="Depth image topic.",
-            ),
+            # DeclareLaunchArgument(
+            #     "hard_sync",
+            #     default_value="False",
+            #     description="Whether to use exact synchronization.",
+            # ),
+            # DeclareLaunchArgument(
+            #     "sync_queue_size",
+            #     default_value="10",
+            #     description="Queue size for message synchronization.",
+            # ),
+            # DeclareLaunchArgument(
+            #     "processing_rate_hz",
+            #     default_value="1.0",
+            #     description="Maximum RGB-D processing rate in Hz.",
+            # ),
+            # DeclareLaunchArgument(
+            #     "color_image_topic",
+            #     default_value="/camera/rgb/image_color",
+            #     description="Color image topic.",
+            # ),
+            # DeclareLaunchArgument(
+            #     "depth_image_topic",
+            #     default_value="/camera/depth/image",
+            #     description="Depth image topic.",
+            # ),
             # launch nodes normally if not use composition
             GroupAction(
                 condition=IfCondition(PythonExpression(["not ", use_composition])),

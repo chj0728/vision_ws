@@ -1,5 +1,5 @@
 yolo_pipeline:
-  yolo_engine_path: /home/caohaojie/ws/vision_ws/models/yolo/yolo26m_fp16.engine
+  yolo_engine_name: yolo26m_fp16.engine
   conf_threshold: 0.45
   max_distance_m: 5.0
   depth_scale_to_meters: 0.001

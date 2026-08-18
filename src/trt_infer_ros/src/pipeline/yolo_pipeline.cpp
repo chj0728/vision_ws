@@ -1,6 +1,7 @@
 #include "pipeline/yolo_pipeline.hpp"
 #include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
 
+#include <filesystem>
 #include <iostream>
 
 YOLOPipeline::YOLOPipeline(YAML::Node &config) {
@@ -14,8 +15,13 @@ void YOLOPipeline::loadParameters(YAML::Node &config) {
 
   config = config["yolo_pipeline"];
 
-  yolo_engine_path = config["yolo_engine_path"].as<std::string>(
-      "/home/caohaojie/ws/vision_ws/models/yolo/yolo26m_fp16.engine");
+  yolo_engine_name_ =
+      config["yolo_engine_name"].as<std::string>("yolo26m_fp16.engine");
+
+  // TRT_WORKSPACE_ROOT 由 CMake 注入。
+  yolo_engine_path_ = (std::filesystem::path(TRT_WORKSPACE_ROOT) / "models" /
+                       "yolo" / yolo_engine_name_)
+                          .string();
 
   conf_ = config["conf_threshold"].as<float>(0.45f);
   max_distance_m_ = config["max_distance_m"].as<float>(5.0f);
@@ -41,7 +47,7 @@ void YOLOPipeline::loadParameters(YAML::Node &config) {
 void YOLOPipeline::initialize() {
   // Initialize the YOLO pipeline with the loaded parameters
   yolo_engine_ptr_ = std::make_unique<YOLOEngine>(
-      yolo_engine_path, conf_, bbox_in_original_space, engine_input_height,
+      yolo_engine_path_, conf_, bbox_in_original_space, engine_input_height,
       engine_input_width);
 }
 

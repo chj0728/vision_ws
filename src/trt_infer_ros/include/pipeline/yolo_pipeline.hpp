@@ -33,11 +33,18 @@ public:
    */
   void process(const cv::Mat &rgb, const cv::Mat &depth,
                PerceptionResult &perception_result);
+  /**
+   * @brief Get the Engine Path object
+   *
+   * @return std::string
+   */
+  std::string getEnginePath() const { return yolo_engine_path_; }
 
 private:
   std::unique_ptr<YOLOEngine> yolo_engine_ptr_;
 
-  std::string yolo_engine_path;
+  std::string yolo_engine_name_;
+  std::string yolo_engine_path_;
 
   float conf_{0.45f};          // Confidence threshold for YOLO detections
   float max_distance_m_{5.0f}; // 最大距离阈值，单位为米
