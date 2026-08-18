@@ -20,29 +20,27 @@ using trt_infer_msgs::msg::PerceptionResult;
 class PerceptionPipeline {
 
 private:
-    YAML::Node config_;
-    std::unique_ptr<YOLOPipeline> yolo_pipeline_ptr_;
+  YAML::Node config_;
+  std::unique_ptr<YOLOPipeline> yolo_pipeline_ptr_;
 
 public:
-    PerceptionPipeline(YAML::Node & config);
-    ~PerceptionPipeline();
+  PerceptionPipeline(YAML::Node &config);
+  ~PerceptionPipeline();
 
-    /**
-     * @brief 初始化感知模块
-     */
-    void initialize();
+  /**
+   * @brief 初始化感知模块
+   */
+  void initialize();
 
-    /**
-     * @brief 处理RGB和深度图像，生成感知结果
-     * 
-     * @param rgb 
-     * @param depth 
-     * @param perception_result 
-     */
-    void process(
-        const cv::Mat& rgb,
-        const cv::Mat& depth,
-        PerceptionResult& perception_result);
+  /**
+   * @brief 处理RGB和深度图像，生成感知结果
+   *
+   * @param rgb
+   * @param depth
+   * @param perception_result
+   */
+  void process(const cv::Mat &rgb, const cv::Mat &depth,
+               PerceptionResult &perception_result);
 };
 
 #endif // PERCEPTION_PIPELINE_HPP
