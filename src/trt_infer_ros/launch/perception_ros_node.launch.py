@@ -64,7 +64,7 @@ def generate_launch_description():
             SetEnvironmentVariable(name="ROS_LOG_DIR", value=log_dir),
             SetEnvironmentVariable(
                 name="RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                value="[{severity}][{time}]-[{function_name}:{line_number}]: {message}",
+                value="[{severity}][{time}]-[{name}:{line_number}]: {message}",
             ),
             DeclareLaunchArgument(
                 "use_composition",

@@ -12,6 +12,7 @@
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include "pipeline/scrfd_pipeline.hpp"
 #include "pipeline/yolo_pipeline.hpp"
 
 #include "trt_infer_msgs/msg/perception_result.hpp"
@@ -22,6 +23,7 @@ class PerceptionPipeline {
 private:
   YAML::Node config_;
   std::unique_ptr<YOLOPipeline> yolo_pipeline_ptr_;
+  std::unique_ptr<SCRFDPipeline> scrfd_pipeline_ptr_;
 
 public:
   PerceptionPipeline(YAML::Node &config);

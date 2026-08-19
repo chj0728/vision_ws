@@ -17,3 +17,16 @@ yolo_pipeline:
   bbox_coord_space: letterbox
   engine_input_h: 0
   engine_input_w: 0
+
+scrfd_pipeline:
+  enable: false
+  scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.trt
+  scrfd_engine_path: ""
+  preprocess: insightface
+  prob_threshold: 0.38
+  nms_threshold: 0.45
+  person_head_height_ratio: 0.58
+  person_head_width_pad_ratio: 0.24
+  person_head_top_expand_ratio: 0.14
+  face_roi_min_side: 48
+  max_person_rois: 8
