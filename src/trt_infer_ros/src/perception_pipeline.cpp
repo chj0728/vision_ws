@@ -16,9 +16,13 @@ void PerceptionPipeline::initialize() {
   // Initialize the YOLO pipeline
   yolo_pipeline_ptr_ = std::make_unique<YOLOPipeline>(config_);
   std::cout << "[YOLOPipeline]:" << std::endl;
-  std::cout << "|-->loaded engine from: " << yolo_pipeline_ptr_->getEnginePath()
-            << std::endl;
-  std::cout << "|--> is initialized successfully." << std::endl;
+  if (yolo_pipeline_ptr_->isEnabled()) {
+    std::cout << "|-->loaded engine from: "
+              << yolo_pipeline_ptr_->getEnginePath() << std::endl;
+    std::cout << "|--> is initialized successfully." << std::endl;
+  } else {
+    std::cout << "|--> disabled." << std::endl;
+  }
   std::cout << "|____________________________" << std::endl;
 
   scrfd_pipeline_ptr_ = std::make_unique<SCRFDPipeline>(config_);

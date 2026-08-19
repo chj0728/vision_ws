@@ -12,10 +12,10 @@
 
 class SCRFDPipeline {
 public:
-  explicit SCRFDPipeline(YAML::Node &config);
+  explicit SCRFDPipeline(const YAML::Node &config);
   ~SCRFDPipeline();
 
-  void loadParameters(YAML::Node &config);
+  void loadParameters(const YAML::Node &config);
   void initialize();
   void process(const cv::Mat &rgb,
                trt_infer_msgs::msg::PerceptionResult &perception_result);

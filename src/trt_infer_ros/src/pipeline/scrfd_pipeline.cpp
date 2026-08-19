@@ -50,19 +50,34 @@ std::string toLower(std::string value) {
 
 } // namespace
 
-SCRFDPipeline::SCRFDPipeline(YAML::Node &config) {
+SCRFDPipeline::SCRFDPipeline(const YAML::Node &config) {
   loadParameters(config);
   initialize();
 }
 
 SCRFDPipeline::~SCRFDPipeline() = default;
 
-void SCRFDPipeline::loadParameters(YAML::Node &config) {
+void SCRFDPipeline::loadParameters(const YAML::Node &config) {
   const YAML::Node scrfd_config = config["scrfd_pipeline"];
 
   enabled_ = scrfd_config["enable"].as<bool>(false);
+
   scrfd_engine_name_ = scrfd_config["scrfd_engine_name"].as<std::string>(
       "scrfd_2.5g_bnkps_shape640x640.trt");
+  const std::string configured_path =
+      scrfd_config["scrfd_engine_path"].as<std::string>("");
+  if (!configured_path.empty()) {
+    const std::filesystem::path path(configured_path);
+    scrfd_engine_path_ =
+        (path.is_absolute() ? path
+                            : std::filesystem::path(TRT_WORKSPACE_ROOT) / path)
+            .string();
+  } else {
+    scrfd_engine_path_ = (std::filesystem::path(TRT_WORKSPACE_ROOT) / "models" /
+                          "scrfd" / scrfd_engine_name_)
+                             .string();
+  }
+
   preprocess_ =
       toLower(scrfd_config["preprocess"].as<std::string>("insightface"));
   prob_threshold_ =
@@ -78,26 +93,14 @@ void SCRFDPipeline::loadParameters(YAML::Node &config) {
   face_roi_min_side_ =
       std::max(32, scrfd_config["face_roi_min_side"].as<int>(48));
   max_person_rois_ = std::max(1, scrfd_config["max_person_rois"].as<int>(8));
-
-  const std::string configured_path =
-      scrfd_config["scrfd_engine_path"].as<std::string>("");
-  if (!configured_path.empty()) {
-    const std::filesystem::path path(configured_path);
-    scrfd_engine_path_ =
-        (path.is_absolute() ? path
-                            : std::filesystem::path(TRT_WORKSPACE_ROOT) / path)
-            .string();
-  } else {
-    scrfd_engine_path_ = (std::filesystem::path(TRT_WORKSPACE_ROOT) / "models" /
-                          "scrfd" / scrfd_engine_name_)
-                             .string();
-  }
 }
 
 void SCRFDPipeline::initialize() {
+
   if (!enabled_) {
     return;
   }
+
   if (!std::filesystem::exists(scrfd_engine_path_)) {
     throw std::runtime_error("SCRFD engine not found: " + scrfd_engine_path_);
   }

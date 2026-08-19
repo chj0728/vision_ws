@@ -8,7 +8,7 @@ using trt_infer_msgs::msg::PerceptionResult;
 
 class YOLOPipeline {
 public:
-  YOLOPipeline(YAML::Node &config);
+  YOLOPipeline(const YAML::Node &config);
   ~YOLOPipeline();
 
   /**
@@ -16,7 +16,7 @@ public:
    *
    * @param config The YAML node containing the configuration parameters.
    */
-  void loadParameters(YAML::Node &config);
+  void loadParameters(const YAML::Node &config);
 
   /**
    * @brief Initialize the YOLO pipeline with the loaded parameters.
@@ -33,6 +33,7 @@ public:
    */
   void process(const cv::Mat &rgb, const cv::Mat &depth,
                PerceptionResult &perception_result);
+
   /**
    * @brief Get the Engine Path object
    *
@@ -40,8 +41,17 @@ public:
    */
   std::string getEnginePath() const { return yolo_engine_path_; }
 
+  /**
+   * @brief Check if the YOLO pipeline is enabled.
+   *
+   * @return true if enabled, false otherwise.
+   */
+  bool isEnabled() const { return enabled_; }
+
 private:
   std::unique_ptr<YOLOEngine> yolo_engine_ptr_;
+
+  bool enabled_{false};
 
   std::string yolo_engine_name_;
   std::string yolo_engine_path_;

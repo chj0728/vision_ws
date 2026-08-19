@@ -1,5 +1,7 @@
 yolo_pipeline:
+  enable: true
   yolo_engine_name: yolo26m_fp16.engine
+  yolo_engine_path: ""
   conf_threshold: 0.45
   max_distance_m: 5.0
   depth_scale_to_meters: 0.001
@@ -19,8 +21,8 @@ yolo_pipeline:
   engine_input_w: 0
 
 scrfd_pipeline:
-  enable: false
-  scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.trt
+  enable: true
+  scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.engine
   scrfd_engine_path: ""
   preprocess: insightface
   prob_threshold: 0.38
