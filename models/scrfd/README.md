@@ -24,7 +24,7 @@ source scrfd_export_venv/bin/activate
 
 python -m ensurepip --upgrade
 
-python -m pip install \ 
+python -m pip install \
     "pip<24.1" \
     "setuptools<60" \
     wheel
@@ -121,21 +121,33 @@ PY
 - 导出 ONNX
 
 ```bash
-cd .../insightface
+cd ./insightface
 
 # SCRFD_2.5G
 python detection/scrfd/tools/scrfd2onnx.py \
     detection/scrfd/configs/scrfd/scrfd_2.5g.py \
-    /home/xuyao/chj/ws/vision_dev/vision_ws/models/scrfd/SCRFD_2.5G/model.pth \
+    ../SCRFD_2.5G/model.pth \
     --input-img /tmp/scrfd_export_input.jpg \
-    --output-file /home/xuyao/chj/ws/vision_dev/vision_ws/models/scrfd/scrfd_2.5g_shape640x640.onnx \
+    --output-file ../scrfd_2.5g_shape640x640.onnx \
     --shape 640 640
 
 # SCRFD_2.5G_KPS
 python detection/scrfd/tools/scrfd2onnx.py \
     detection/scrfd/configs/scrfd/scrfd_2.5g_bnkps.py \
-    /home/xuyao/chj/ws/vision_dev/vision_ws/models/scrfd/SCRFD_2.5G_KPS/model.pth \
+    ../SCRFD_2.5G_KPS/model.pth \
     --input-img /tmp/scrfd_export_input.jpg \
-    --output-file /home/xuyao/chj/ws/vision_dev/vision_ws/models/scrfd/scrfd_2.5g_bnkps_shape640x640.onnx \
+    --output-file ../scrfd_2.5g_bnkps_shape640x640.onnx \
     --shape 640 640
+```
+
+- Export engine
+
+```bash
+# SCRFD_2.5G
+trtexec --onnx=scrfd_2.5g_shape640x640.onnx \
+        --saveEngine=scrfd_2.5g_shape640x640.engine
+
+# SCRFD_2.5G_KPS
+trtexec --onnx=scrfd_2.5g_bnkps_shape640x640.onnx \
+        --saveEngine=scrfd_2.5g_bnkps_shape640x640.engine
 ```
