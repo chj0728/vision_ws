@@ -45,8 +45,8 @@ scrfd_pipeline:
 
 # 消费 SCRFD 五点关键点，并按 track_id 维护识别状态。
 arcface_pipeline:
-  enable: false
-  arcface_engine_name: w600k_r50_b16_gpu0_fp16.engine
+  enable: true
+  arcface_engine_name: arcface_w600k_r50_fp16.engine
   arcface_engine_path: ""
   face_db_path: data/face_db.sqlite3
   recog_threshold: 0.45

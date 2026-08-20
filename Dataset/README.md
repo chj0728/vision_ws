@@ -12,7 +12,7 @@ wget https://cvg.cit.tum.de/rgbd/dataset/freiburg3/rgbd_dataset_freiburg3_sittin
 - ROS1 bag 转换成 ROS2 bag
 
 ```bash
-uv venv venv
+uv venv venv --python 3.10
 source venv/bin/activate
 uv pip install rosbags -i https://mirrors.aliyun.com/pypi/simple/
 

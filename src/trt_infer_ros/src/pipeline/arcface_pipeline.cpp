@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <iterator>
 #include <stdexcept>
 
@@ -18,8 +19,7 @@ void ArcFacePipeline::loadParameters(const YAML::Node &config) {
 
   enabled_ = arcface_config["enable"].as<bool>(false);
   auto_register_ = arcface_config["auto_register"].as<bool>(true);
-  require_head_pose_ =
-      arcface_config["require_head_pose"].as<bool>(false);
+  require_head_pose_ = arcface_config["require_head_pose"].as<bool>(false);
   arcface_engine_name_ = arcface_config["arcface_engine_name"].as<std::string>(
       "w600k_r50_b16_gpu0_fp16.engine");
 
@@ -32,37 +32,35 @@ void ArcFacePipeline::loadParameters(const YAML::Node &config) {
                             : std::filesystem::path(TRT_WORKSPACE_ROOT) / path)
             .string();
   } else {
-    arcface_engine_path_ =
-        (std::filesystem::path(TRT_WORKSPACE_ROOT) / "models" / "arcface" /
-         arcface_engine_name_)
-            .string();
+    arcface_engine_path_ = (std::filesystem::path(TRT_WORKSPACE_ROOT) /
+                            "models" / "arcface" / arcface_engine_name_)
+                               .string();
   }
 
   const std::string configured_db_path =
       arcface_config["face_db_path"].as<std::string>("data/face_db.sqlite3");
   const std::filesystem::path db_path(configured_db_path);
-  face_db_path_ =
-      (db_path.is_absolute()
-           ? db_path
-           : std::filesystem::path(TRT_WORKSPACE_ROOT) / db_path)
-          .string();
+  face_db_path_ = (db_path.is_absolute()
+                       ? db_path
+                       : std::filesystem::path(TRT_WORKSPACE_ROOT) / db_path)
+                      .string();
 
   recog_threshold_ = std::clamp(
       arcface_config["recog_threshold"].as<float>(0.45f), 0.05f, 0.99f);
   min_face_px_ = std::max(16, arcface_config["min_face_px"].as<int>(64));
   min_face_confidence_ = std::clamp(
       arcface_config["min_face_confidence"].as<float>(0.75f), 0.0f, 1.0f);
-  max_yaw_deg_ = std::clamp(
-      arcface_config["max_yaw_deg"].as<float>(30.0f), 1.0f, 90.0f);
-  max_pitch_deg_ = std::clamp(
-      arcface_config["max_pitch_deg"].as<float>(25.0f), 1.0f, 90.0f);
+  max_yaw_deg_ =
+      std::clamp(arcface_config["max_yaw_deg"].as<float>(30.0f), 1.0f, 90.0f);
+  max_pitch_deg_ =
+      std::clamp(arcface_config["max_pitch_deg"].as<float>(25.0f), 1.0f, 90.0f);
   min_track_frames_ =
       std::max(1, arcface_config["min_track_frames"].as<int>(20));
   recheck_interval_frames_ =
       std::max(1, arcface_config["recheck_interval_frames"].as<int>(150));
-  embedding_buffer_size_ = std::clamp(
-      arcface_config["embedding_buffer_size"].as<int>(5), 1,
-      FaceDatabase::kMaxEmbeddings);
+  embedding_buffer_size_ =
+      std::clamp(arcface_config["embedding_buffer_size"].as<int>(5), 1,
+                 FaceDatabase::kMaxEmbeddings);
 }
 
 void ArcFacePipeline::initialize() {
@@ -98,10 +96,30 @@ bool ArcFacePipeline::passesQualityGate(
     const trt_infer_msgs::msg::PersonMeta &person) const {
   const auto &face_detection = person.face_detection;
   const auto &face_bbox = face_detection.face_bbox;
+
+  // // person_context.has_face
+  // std::cout << "Track ID: " << person_context.track_id
+  //           << ", Has Face: " << (person_context.has_face ? "Yes" : "No")
+  //           << std::endl;
+  // std::cout << "Face BBox: (" << face_bbox.x << ", " << face_bbox.y << ", "
+  //           << face_bbox.w << ", " << face_bbox.h
+  //           << "), Face Confidence: " << face_detection.face_confidence
+  //           << ", Track Total Frames: " << person_context.track_total_frames
+  //           << std::endl;
+
+  // std::cout << "Quality Gate Parameters: "
+  //           << "Min Face PX: " << min_face_px_
+  //           << ", Min Face Confidence: " << min_face_confidence_
+  //           << ", Min Track Frames: " << min_track_frames_ << std::endl;
+
   if (!person_context.has_face || person_context.track_id < 0 ||
       person_context.track_total_frames < min_track_frames_ ||
       face_detection.face_confidence < min_face_confidence_ ||
       face_bbox.w < min_face_px_ || face_bbox.h < min_face_px_) {
+    // std::cout << "Track ID: " << person_context.track_id
+    //           << " fails quality gate due to insufficient face quality or "
+    //              "track length."
+    //           << std::endl;
     return false;
   }
 
@@ -111,13 +129,12 @@ bool ArcFacePipeline::passesQualityGate(
   const float yaw = person.head_pose.yaw;
   const float pitch = person.head_pose.pitch;
   return std::isfinite(yaw) && std::isfinite(pitch) &&
-         std::abs(yaw) <= max_yaw_deg_ &&
-         std::abs(pitch) <= max_pitch_deg_;
+         std::abs(yaw) <= max_yaw_deg_ && std::abs(pitch) <= max_pitch_deg_;
 }
 
-bool ArcFacePipeline::extractEmbedding(
-    const cv::Mat &rgb, const PersonFrameContext &person_context,
-    FaceEmbedding &embedding) const {
+bool ArcFacePipeline::extractEmbedding(const cv::Mat &rgb,
+                                       const PersonFrameContext &person_context,
+                                       FaceEmbedding &embedding) const {
   if (!arcface_engine_ptr_ || !person_context.has_face) {
     return false;
   }
@@ -142,7 +159,8 @@ void ArcFacePipeline::processPending(
   state.pitch_buffer.push_back(person.head_pose.pitch);
   state.confidence_buffer.push_back(person.face_detection.face_confidence);
 
-  if (static_cast<int>(state.embedding_buffer.size()) < embedding_buffer_size_) {
+  if (static_cast<int>(state.embedding_buffer.size()) <
+      embedding_buffer_size_) {
     return;
   }
 
@@ -191,7 +209,8 @@ void ArcFacePipeline::processIdentified(RecognitionState &state,
 }
 
 void ArcFacePipeline::pruneStates(const std::set<int> &retained_track_ids) {
-  for (auto it = recognition_states_.begin(); it != recognition_states_.end();) {
+  for (auto it = recognition_states_.begin();
+       it != recognition_states_.end();) {
     if (retained_track_ids.count(it->first) == 0U) {
       it = recognition_states_.erase(it);
     } else {
@@ -200,8 +219,7 @@ void ArcFacePipeline::pruneStates(const std::set<int> &retained_track_ids) {
   }
 }
 
-void ArcFacePipeline::clearMessage(
-    trt_infer_msgs::msg::FaceRecog &face_recog) {
+void ArcFacePipeline::clearMessage(trt_infer_msgs::msg::FaceRecog &face_recog) {
   face_recog.person_uuid.clear();
   face_recog.person_name.clear();
   face_recog.face_recog_conf = 0.0f;
@@ -216,8 +234,7 @@ void ArcFacePipeline::writeEmbedding(
 }
 
 void ArcFacePipeline::writeIdentity(
-    const RecognitionState &state,
-    trt_infer_msgs::msg::FaceRecog &face_recog) {
+    const RecognitionState &state, trt_infer_msgs::msg::FaceRecog &face_recog) {
   if (state.status != RecognitionStatus::Identified) {
     return;
   }
@@ -239,6 +256,9 @@ void ArcFacePipeline::process(
   pruneStates(frame_context.retained_track_ids);
   const std::size_t person_count =
       std::min(perception_result.persons.size(), frame_context.persons.size());
+
+  const auto start_time = std::chrono::high_resolution_clock::now();
+
   for (std::size_t index = 0; index < person_count; ++index) {
     auto &person = perception_result.persons[index];
     const auto &person_context = frame_context.persons[index];
@@ -262,8 +282,22 @@ void ArcFacePipeline::process(
     }
 
     if (should_extract) {
+      // std::cout << "Extracting embedding for track ID: "
+      //           << person_context.track_id << std::endl;
       FaceEmbedding embedding{};
       if (extractEmbedding(rgb, person_context, embedding)) {
+
+        // // 打印部分embedding向量的值
+        // std::cout << "Embedding for track ID " << person_context.track_id
+        //           << ": [";
+        // for (int i = 0; i < 5; ++i) { // 打印前5个元素
+        //   std::cout << embedding.v[i];
+        //   if (i < 4) {
+        //     std::cout << ", ";
+        //   }
+        // }
+        // std::cout << ", ...]" << std::endl; // 表示后续元素省略
+
         writeEmbedding(embedding, person.face_recog);
         if (state.status == RecognitionStatus::Pending) {
           processPending(state, embedding, person, frame_context.frame_number);
@@ -274,6 +308,11 @@ void ArcFacePipeline::process(
     }
     writeIdentity(state, person.face_recog);
   }
+
+  std::chrono::duration<float, std::milli> pipeline_duration =
+      std::chrono::high_resolution_clock::now() - start_time;
+  std::cout << "[ArcFacePipeline] Processing time: "
+            << pipeline_duration.count() << " ms" << std::endl;
 }
 
 bool ArcFacePipeline::updatePersonName(const std::string &uuid,
