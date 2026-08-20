@@ -1,3 +1,4 @@
+# 人体检测 + 距离
 yolo_pipeline:
   enable: true
   yolo_engine_name: yolo26m_fp16.engine
@@ -20,6 +21,15 @@ yolo_pipeline:
   engine_input_h: 0
   engine_input_w: 0
 
+# 人体框时序关联，不执行人脸识别。
+iou_tracker:
+  enable: true
+  iou_threshold: 0.30
+  max_age_frames: 30
+  reid_window_seconds: 30
+  revive_iou_scale: 0.40
+
+# 人脸检测 + 关键点
 scrfd_pipeline:
   enable: true
   scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.engine
@@ -32,3 +42,20 @@ scrfd_pipeline:
   person_head_top_expand_ratio: 0.14
   face_roi_min_side: 48
   max_person_rois: 8
+
+# 消费 SCRFD 五点关键点，并按 track_id 维护识别状态。
+arcface_pipeline:
+  enable: false
+  arcface_engine_name: w600k_r50_b16_gpu0_fp16.engine
+  arcface_engine_path: ""
+  face_db_path: data/face_db.sqlite3
+  recog_threshold: 0.45
+  auto_register: true
+  min_face_px: 64
+  min_face_confidence: 0.75
+  min_track_frames: 20
+  embedding_buffer_size: 5
+  recheck_interval_frames: 150
+  require_head_pose: false
+  max_yaw_deg: 30.0
+  max_pitch_deg: 25.0

@@ -73,8 +73,10 @@ ament_target_dependencies(trt_infer_ros_node rclcpp)
 add_library(perception_ros_component SHARED
   src/perception_ros_component.cpp
   src/perception_pipeline.cpp
-  src/pipeline/yolo_pipeline.cpp
+  src/pipeline/arcface_pipeline.cpp
+  src/pipeline/iou_tracker.cpp
   src/pipeline/scrfd_pipeline.cpp
+  src/pipeline/yolo_pipeline.cpp
 )
 configure_component(perception_ros_component)
 ament_target_dependencies(perception_ros_component yaml-cpp)

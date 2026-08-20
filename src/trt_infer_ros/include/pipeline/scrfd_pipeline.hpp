@@ -1,5 +1,6 @@
 #pragma once
 
+#include "pipeline/perception_frame_context.hpp"
 #include "scrfd_trt/scrfd_trt.h"
 
 #include <memory>
@@ -18,7 +19,8 @@ public:
   void loadParameters(const YAML::Node &config);
   void initialize();
   void process(const cv::Mat &rgb,
-               trt_infer_msgs::msg::PerceptionResult &perception_result);
+               trt_infer_msgs::msg::PerceptionResult &perception_result,
+               PerceptionFrameContext &frame_context);
 
   bool isEnabled() const { return enabled_; }
   std::string getEnginePath() const { return scrfd_engine_path_; }

@@ -230,7 +230,7 @@ void PerceptionRosComponent::processColorDepth(
                                     perception_result);
   perception_result_pub_->publish(perception_result);
 
-  // 新增带bbox的图像发布功能
+  // 新增带感知信息的彩色图像发布
   // 图像格式: sensor_msgs::msg::Image
   // 遍历 perception_result.persons
   // 1. 绘制每个人体的bbox
@@ -245,6 +245,8 @@ void PerceptionRosComponent::processColorDepth(
   // fy0 = perception_result.persons[i].face_detection.face_bbox.y
   // fx1 = fx0 + perception_result.persons[i].face_detection.face_bbox.w
   // fy1 = fy0 + perception_result.persons[i].face_detection.face_bbox.h
+  // 3. 绘制 track_id
+  // 绘制在人体bbox的左上角，文本内容为 perception_result.persons[i].track_id
   if (color_bbox_pub_->get_subscription_count() > 0) {
     cv::Mat color_image_with_bbox = color_image_mat.clone();
     for (const auto &person : perception_result.persons) {
@@ -264,6 +266,12 @@ void PerceptionRosComponent::processColorDepth(
             cv::Point(face_bbox.x + face_bbox.w, face_bbox.y + face_bbox.h),
             cv::Scalar(0, 0, 255), 4);
       }
+
+      // 3. 绘制 track_id
+      const auto &track_id = person.track_id;
+      cv::putText(color_image_with_bbox, std::to_string(track_id),
+                  cv::Point(body_bbox.x, body_bbox.y - 10),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(255, 0, 0), 4);
     }
     sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
         cv_bridge::CvImage(color_msg->header, "bgr8", color_image_with_bbox)

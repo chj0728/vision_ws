@@ -13,6 +13,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BodyDetection.msg"
   "msg/BoundingBox.msg"
   "msg/FaceDetection.msg"
+  "msg/FaceRecog.msg"
+  "msg/HeadPose.msg"
   "msg/PerceptionResult.msg"
   "msg/PersonMeta.msg"
 

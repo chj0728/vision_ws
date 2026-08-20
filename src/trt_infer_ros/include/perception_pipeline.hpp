@@ -12,6 +12,8 @@
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include "pipeline/arcface_pipeline.hpp"
+#include "pipeline/iou_tracker.hpp"
 #include "pipeline/scrfd_pipeline.hpp"
 #include "pipeline/yolo_pipeline.hpp"
 
@@ -23,7 +25,10 @@ class PerceptionPipeline {
 private:
   YAML::Node config_;
   std::unique_ptr<YOLOPipeline> yolo_pipeline_ptr_;
+  std::unique_ptr<IouTracker> iou_tracker_ptr_;
   std::unique_ptr<SCRFDPipeline> scrfd_pipeline_ptr_;
+  std::unique_ptr<ArcFacePipeline> arcface_pipeline_ptr_;
+  int frame_number_{0};
 
 public:
   PerceptionPipeline(YAML::Node &config);

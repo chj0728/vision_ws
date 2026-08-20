@@ -120,7 +120,21 @@ void SCRFDPipeline::initialize() {
 
 void SCRFDPipeline::process(
     const cv::Mat &rgb,
-    trt_infer_msgs::msg::PerceptionResult &perception_result) {
+    trt_infer_msgs::msg::PerceptionResult &perception_result,
+    PerceptionFrameContext &frame_context) {
+  if (frame_context.persons.size() != perception_result.persons.size()) {
+    frame_context.persons.resize(perception_result.persons.size());
+  }
+  for (std::size_t index = 0; index < perception_result.persons.size(); ++index) {
+    auto &person_context = frame_context.persons[index];
+    person_context.has_face = false;
+    auto &face_detection = perception_result.persons[index].face_detection;
+    face_detection.face_bbox.x = 0;
+    face_detection.face_bbox.y = 0;
+    face_detection.face_bbox.w = 0;
+    face_detection.face_bbox.h = 0;
+    face_detection.face_confidence = 0.0f;
+  }
   if (!enabled_ || !scrfd_engine_ptr_ || rgb.empty()) {
     return;
   }
@@ -128,13 +142,8 @@ void SCRFDPipeline::process(
   const auto start_time = std::chrono::high_resolution_clock::now();
   int processed_rois = 0;
 
-  for (auto &person : perception_result.persons) {
-    person.face_detection.face_bbox.x = 0;
-    person.face_detection.face_bbox.y = 0;
-    person.face_detection.face_bbox.w = 0;
-    person.face_detection.face_bbox.h = 0;
-    person.face_detection.face_confidence = 0.0f;
-
+  for (std::size_t index = 0; index < perception_result.persons.size(); ++index) {
+    auto &person = perception_result.persons[index];
     if (processed_rois >= max_person_rois_) {
       break;
     }
@@ -159,10 +168,19 @@ void SCRFDPipeline::process(
                          [](const FaceObject &lhs, const FaceObject &rhs) {
                            return lhs.prob < rhs.prob;
                          });
-    const cv::Rect face_rect(static_cast<int>(std::floor(best->rect.x)) + roi.x,
-                             static_cast<int>(std::floor(best->rect.y)) + roi.y,
-                             static_cast<int>(std::ceil(best->rect.width)),
-                             static_cast<int>(std::ceil(best->rect.height)));
+    FaceObject global_face = *best;
+    global_face.rect.x += static_cast<float>(roi.x);
+    global_face.rect.y += static_cast<float>(roi.y);
+    for (cv::Point2f &landmark : global_face.landmark) {
+      landmark.x += static_cast<float>(roi.x);
+      landmark.y += static_cast<float>(roi.y);
+    }
+
+    const cv::Rect face_rect(
+        static_cast<int>(std::floor(global_face.rect.x)),
+        static_cast<int>(std::floor(global_face.rect.y)),
+        static_cast<int>(std::ceil(global_face.rect.width)),
+        static_cast<int>(std::ceil(global_face.rect.height)));
     const cv::Rect clipped_face =
         face_rect & cv::Rect(0, 0, rgb.cols, rgb.rows);
     if (clipped_face.width <= 0 || clipped_face.height <= 0) {
@@ -174,7 +192,11 @@ void SCRFDPipeline::process(
     face_detection.face_bbox.y = clipped_face.y;
     face_detection.face_bbox.w = clipped_face.width;
     face_detection.face_bbox.h = clipped_face.height;
-    face_detection.face_confidence = best->prob;
+    face_detection.face_confidence = global_face.prob;
+
+    auto &person_context = frame_context.persons[index];
+    person_context.has_face = true;
+    person_context.face = global_face;
   }
 
   const std::chrono::duration<float, std::milli> duration =
