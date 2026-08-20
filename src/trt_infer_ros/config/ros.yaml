@@ -6,4 +6,4 @@
     hard_sync: false
     sync_queue_size: 1
     processing_rate_hz: 10.0
-    color_bbox_topic: /camera/color/bbox
+    color_bbox_topic: /camera/color/image_bbox

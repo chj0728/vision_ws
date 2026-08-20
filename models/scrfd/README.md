@@ -143,11 +143,15 @@ python detection/scrfd/tools/scrfd2onnx.py \
 - Export engine
 
 ```bash
+# /usr/src/tensorrt/bin/trtexec
+
 # SCRFD_2.5G
 trtexec --onnx=scrfd_2.5g_shape640x640.onnx \
-        --saveEngine=scrfd_2.5g_shape640x640.engine
+--saveEngine=scrfd_2.5g_shape640x640.engine \
+--builderOptimizationLevel=5
 
 # SCRFD_2.5G_KPS
 trtexec --onnx=scrfd_2.5g_bnkps_shape640x640.onnx \
-        --saveEngine=scrfd_2.5g_bnkps_shape640x640.engine
+--saveEngine=scrfd_2.5g_bnkps_shape640x640.engine \
+--builderOptimizationLevel=5
 ```
