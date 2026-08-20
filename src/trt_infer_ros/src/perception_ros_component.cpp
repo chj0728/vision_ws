@@ -232,19 +232,38 @@ void PerceptionRosComponent::processColorDepth(
 
   // 新增带bbox的图像发布功能
   // 图像格式: sensor_msgs::msg::Image
-  // 遍历 perception_result.persons，绘制每个人的bbox
+  // 遍历 perception_result.persons
+  // 1. 绘制每个人体的bbox
   // 左上角坐标 (x0, y0)，右下角坐标 (x1, y1)
   // x0 = perception_result.persons[i].body_detection.body_bbox.x
   // y0 = perception_result.persons[i].body_detection.body_bbox.y
   // x1 = x0 + perception_result.persons[i].body_detection.body_bbox.w
   // y1 = y0 + perception_result.persons[i].body_detection.body_bbox.h
+  // 2. 绘制每个人的人脸的bbox
+  // 左上角坐标 (fx0, fy0)，右下角坐标 (fx1, fy1)
+  // fx0 = perception_result.persons[i].face_detection.face_bbox.x
+  // fy0 = perception_result.persons[i].face_detection.face_bbox.y
+  // fx1 = fx0 + perception_result.persons[i].face_detection.face_bbox.w
+  // fy1 = fy0 + perception_result.persons[i].face_detection.face_bbox.h
   if (color_bbox_pub_->get_subscription_count() > 0) {
     cv::Mat color_image_with_bbox = color_image_mat.clone();
     for (const auto &person : perception_result.persons) {
-      const auto &bbox = person.body_detection.body_bbox;
-      cv::rectangle(color_image_with_bbox, cv::Point(bbox.x, bbox.y),
-                    cv::Point(bbox.x + bbox.w, bbox.y + bbox.h),
-                    cv::Scalar(0, 255, 0), 2);
+
+      // 1. 绘制人体bbox
+      const auto &body_bbox = person.body_detection.body_bbox;
+      cv::rectangle(
+          color_image_with_bbox, cv::Point(body_bbox.x, body_bbox.y),
+          cv::Point(body_bbox.x + body_bbox.w, body_bbox.y + body_bbox.h),
+          cv::Scalar(0, 255, 0), 4);
+
+      // 2. 绘制人脸bbox
+      const auto &face_bbox = person.face_detection.face_bbox;
+      if (face_bbox.w > 0 && face_bbox.h > 0) {
+        cv::rectangle(
+            color_image_with_bbox, cv::Point(face_bbox.x, face_bbox.y),
+            cv::Point(face_bbox.x + face_bbox.w, face_bbox.y + face_bbox.h),
+            cv::Scalar(0, 0, 255), 4);
+      }
     }
     sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
         cv_bridge::CvImage(color_msg->header, "bgr8", color_image_with_bbox)
