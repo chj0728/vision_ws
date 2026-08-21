@@ -45,7 +45,7 @@ scrfd_pipeline:
 
 # 消费 SCRFD 人脸框，输出 yaw、pitch、roll 头部姿态角。
 sixdrepnet_pipeline:
-  enable: false
+  enable: true
   sixdrepnet_engine_name: SixDRepNet_fp16.engine
   sixdrepnet_engine_path: ""
   min_face_px: 36
@@ -56,7 +56,7 @@ arcface_pipeline:
   enable: true
   arcface_engine_name: arcface_w600k_r50_fp16.engine
   arcface_engine_path: ""
-  face_db_path: data/face_db.sqlite3
+  face_db_path: db/face_db.sqlite3
   recog_threshold: 0.45
   auto_register: true
   min_face_px: 64

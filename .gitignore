@@ -77,3 +77,4 @@ bags/
 
 *.trt
 *.engine
+*.sqlite3

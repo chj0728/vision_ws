@@ -38,7 +38,7 @@ void ArcFacePipeline::loadParameters(const YAML::Node &config) {
   }
 
   const std::string configured_db_path =
-      arcface_config["face_db_path"].as<std::string>("data/face_db.sqlite3");
+      arcface_config["face_db_path"].as<std::string>("db/face_db.sqlite3");
   const std::filesystem::path db_path(configured_db_path);
   face_db_path_ = (db_path.is_absolute()
                        ? db_path
