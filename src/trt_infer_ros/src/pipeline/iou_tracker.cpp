@@ -18,10 +18,9 @@ IouTracker::IouTracker(const YAML::Node &config) { loadParameters(config); }
 void IouTracker::loadParameters(const YAML::Node &config) {
   const YAML::Node tracker_config = config["iou_tracker"];
   enabled_ = tracker_config["enable"].as<bool>(true);
-  iou_threshold_ = std::clamp(
-      tracker_config["iou_threshold"].as<float>(0.30f), 0.01f, 1.0f);
-  max_age_frames_ =
-      std::max(1, tracker_config["max_age_frames"].as<int>(30));
+  iou_threshold_ =
+      std::clamp(tracker_config["iou_threshold"].as<float>(0.30f), 0.01f, 1.0f);
+  max_age_frames_ = std::max(1, tracker_config["max_age_frames"].as<int>(30));
   reid_window_seconds_ =
       std::max(0, tracker_config["reid_window_seconds"].as<int>(30));
   revive_iou_scale_ = std::clamp(
@@ -85,9 +84,10 @@ void IouTracker::retireAndPurgeTracks() {
 
   for (auto it = tracks_.begin(); it != tracks_.end();) {
     if (it->second.is_dead) {
-      const auto dead_seconds = std::chrono::duration_cast<std::chrono::seconds>(
-                                    now - it->second.dead_since)
-                                    .count();
+      const auto dead_seconds =
+          std::chrono::duration_cast<std::chrono::seconds>(
+              now - it->second.dead_since)
+              .count();
       if (dead_seconds > reid_window_seconds_) {
         it = tracks_.erase(it);
         continue;
@@ -147,7 +147,8 @@ void IouTracker::process(
       continue;
     }
     for (const int track_id : live_track_ids) {
-      const float iou = tracks_.at(track_id).iouWith(detections[detection_index]);
+      const float iou =
+          tracks_.at(track_id).iouWith(detections[detection_index]);
       if (iou >= iou_threshold_) {
         candidates.push_back({detection_index, track_id, iou});
       }
@@ -178,7 +179,8 @@ void IouTracker::process(
 
   for (std::size_t detection_index = 0; detection_index < detections.size();
        ++detection_index) {
-    if (detection_matched[detection_index] || detections[detection_index].empty()) {
+    if (detection_matched[detection_index] ||
+        detections[detection_index].empty()) {
       continue;
     }
 
@@ -203,7 +205,8 @@ void IouTracker::process(
   retireAndPurgeTracks();
   frame_context.retained_track_ids = retainedTrackIds();
 
-  for (std::size_t index = 0; index < perception_result.persons.size(); ++index) {
+  for (std::size_t index = 0; index < perception_result.persons.size();
+       ++index) {
     auto &person = perception_result.persons[index];
     auto &person_context = frame_context.persons[index];
     const Track *track = matched_tracks[index];
@@ -218,7 +221,7 @@ void IouTracker::process(
 }
 
 int IouTracker::liveCount() const {
-  return static_cast<int>(std::count_if(
-      tracks_.begin(), tracks_.end(),
-      [](const auto &entry) { return !entry.second.is_dead; }));
+  return static_cast<int>(
+      std::count_if(tracks_.begin(), tracks_.end(),
+                    [](const auto &entry) { return !entry.second.is_dead; }));
 }

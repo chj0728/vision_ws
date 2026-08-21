@@ -28,7 +28,7 @@ void PerceptionPipeline::initialize() {
   iou_tracker_ptr_ = std::make_unique<IouTracker>(config_);
   std::cout << "[IouTracker]:" << std::endl;
   std::cout << (iou_tracker_ptr_->isEnabled() ? "|--> enabled."
-                                                : "|--> disabled.")
+                                              : "|--> disabled.")
             << std::endl;
   std::cout << "|____________________________" << std::endl;
 

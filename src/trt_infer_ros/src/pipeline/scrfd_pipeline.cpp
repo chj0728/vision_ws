@@ -125,7 +125,8 @@ void SCRFDPipeline::process(
   if (frame_context.persons.size() != perception_result.persons.size()) {
     frame_context.persons.resize(perception_result.persons.size());
   }
-  for (std::size_t index = 0; index < perception_result.persons.size(); ++index) {
+  for (std::size_t index = 0; index < perception_result.persons.size();
+       ++index) {
     auto &person_context = frame_context.persons[index];
     person_context.has_face = false;
     auto &face_detection = perception_result.persons[index].face_detection;
@@ -142,7 +143,8 @@ void SCRFDPipeline::process(
   const auto start_time = std::chrono::high_resolution_clock::now();
   int processed_rois = 0;
 
-  for (std::size_t index = 0; index < perception_result.persons.size(); ++index) {
+  for (std::size_t index = 0; index < perception_result.persons.size();
+       ++index) {
     auto &person = perception_result.persons[index];
     if (processed_rois >= max_person_rois_) {
       break;

@@ -97,29 +97,10 @@ bool ArcFacePipeline::passesQualityGate(
   const auto &face_detection = person.face_detection;
   const auto &face_bbox = face_detection.face_bbox;
 
-  // // person_context.has_face
-  // std::cout << "Track ID: " << person_context.track_id
-  //           << ", Has Face: " << (person_context.has_face ? "Yes" : "No")
-  //           << std::endl;
-  // std::cout << "Face BBox: (" << face_bbox.x << ", " << face_bbox.y << ", "
-  //           << face_bbox.w << ", " << face_bbox.h
-  //           << "), Face Confidence: " << face_detection.face_confidence
-  //           << ", Track Total Frames: " << person_context.track_total_frames
-  //           << std::endl;
-
-  // std::cout << "Quality Gate Parameters: "
-  //           << "Min Face PX: " << min_face_px_
-  //           << ", Min Face Confidence: " << min_face_confidence_
-  //           << ", Min Track Frames: " << min_track_frames_ << std::endl;
-
   if (!person_context.has_face || person_context.track_id < 0 ||
       person_context.track_total_frames < min_track_frames_ ||
       face_detection.face_confidence < min_face_confidence_ ||
       face_bbox.w < min_face_px_ || face_bbox.h < min_face_px_) {
-    // std::cout << "Track ID: " << person_context.track_id
-    //           << " fails quality gate due to insufficient face quality or "
-    //              "track length."
-    //           << std::endl;
     return false;
   }
 
@@ -282,21 +263,14 @@ void ArcFacePipeline::process(
     }
 
     if (should_extract) {
-      // std::cout << "Extracting embedding for track ID: "
-      //           << person_context.track_id << std::endl;
       FaceEmbedding embedding{};
       if (extractEmbedding(rgb, person_context, embedding)) {
-
-        // // 打印部分embedding向量的值
-        // std::cout << "Embedding for track ID " << person_context.track_id
-        //           << ": [";
-        // for (int i = 0; i < 5; ++i) { // 打印前5个元素
-        //   std::cout << embedding.v[i];
-        //   if (i < 4) {
-        //     std::cout << ", ";
-        //   }
-        // }
-        // std::cout << ", ...]" << std::endl; // 表示后续元素省略
+        std::cout << "Embedding for track ID " << person_context.track_id
+                  << ": [";
+        for (int i = 0; i < 5; ++i) {
+          std::cout << (i == 0 ? "" : ", ") << embedding.v[i];
+        }
+        std::cout << ", ...]" << std::endl;
 
         writeEmbedding(embedding, person.face_recog);
         if (state.status == RecognitionStatus::Pending) {

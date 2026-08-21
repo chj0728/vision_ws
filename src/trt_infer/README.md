@@ -49,3 +49,54 @@ find_package(trt_infer REQUIRED)
 target_link_libraries(your_target 
 trt_infer::trt_infer)
 ```
+
+## ArcFace Embedding NaN 修复 - 2026-08-21
+
+测试 ArcFace Pipeline 时，发现输出的 512 维人脸特征全部为 `NaN`：
+
+```text
+Embedding for track ID 0: [nan, nan, nan, nan, nan, ...]
+```
+
+### 原因
+
+- 原实现固定按 FP32 分配和复制 TensorRT 输入、输出缓冲区。
+- 当前 ArcFace 模型可能使用 FP16 输入或输出，FP16 数据被按 FP32 读取后会产生错误数值或 `NaN`。
+- 原 `l2Normalize()` 未检查 `NaN`、`Inf` 和零范数，一个异常分量会使整个 Embedding 在归一化后变成 `NaN`。
+- CUDA 异步推理完成后的同步状态未检查，运行时错误可能被当作推理成功。
+- 无效 Embedding 仍会进入消息缓冲，并可能被自动注册到 SQLite 人脸库。
+
+### TensorRT 推理修复
+
+更新 `arcface_trt.h` 和 `arcface_trt.cpp`：
+
+- 读取并验证 TensorRT Engine 的真实输入、输出数据类型。
+- 同时支持 FP16 和 FP32 I/O。
+- FP16 输入执行 `float -> half` 转换，FP16 输出执行 `half -> float` 转换。
+- 验证 Engine 仅包含一个输入和一个输出。
+- 验证输入形状为 `[1, 3, 112, 112]`，输出元素数量为 512。
+- 检查动态输入形状设置和 Tensor 地址绑定结果。
+- 检查 H2D、D2H、`enqueueV3()` 和 `cudaStreamSynchronize()` 的执行结果。
+- 推理失败时将输出特征清零并返回 `false`。
+- Engine 加载时输出实际 Tensor 名称及 I/O 数据类型，便于确认模型接口。
+
+### Embedding 有效性保护
+
+- `l2Normalize()` 改为返回归一化是否成功。
+- 归一化前检查所有特征值是否为有限数。
+- 使用双精度累计 L2 范数，拒绝非有限或接近零的范数。
+- 归一化失败时清零整个 Embedding，阻止其继续发布、识别或注册。
+- `cosineSim()` 遇到无效特征时返回不匹配结果。
+- 部分特征值仅在完整校验成功后打印，不再输出或注册 `NaN`。
+
+### 人脸数据库保护
+
+更新 `face_database.cpp`：
+
+- 从 SQLite 加载时跳过 `NaN`、`Inf` 和零范数特征。
+- 身份查询前重新验证并归一化查询特征。
+- 注册人物前过滤无效 Embedding。
+- 没有任何有效特征时拒绝创建人物记录。
+- 已经写入数据库的无效特征不会再加载到内存人脸库。
+
+> 修复前自动注册的测试人物可能已包含无效 Embedding，重新测试前应备份并清理对应测试数据库。
