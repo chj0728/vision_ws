@@ -43,6 +43,14 @@ scrfd_pipeline:
   face_roi_min_side: 48
   max_person_rois: 8
 
+# 消费 SCRFD 人脸框，输出 yaw、pitch、roll 头部姿态角。
+sixdrepnet_pipeline:
+  enable: false
+  sixdrepnet_engine_name: SixDRepNet_fp16.engine
+  sixdrepnet_engine_path: ""
+  min_face_px: 36
+  face_expand_ratio: 0.12
+
 # 消费 SCRFD 五点关键点，并按 track_id 维护识别状态。
 arcface_pipeline:
   enable: true

@@ -43,6 +43,17 @@ void PerceptionPipeline::initialize() {
   }
   std::cout << "|____________________________" << std::endl;
 
+  sixdrepnet_pipeline_ptr_ = std::make_unique<SixDRepNetPipeline>(config_);
+  std::cout << "[SixDRepNetPipeline]:" << std::endl;
+  if (sixdrepnet_pipeline_ptr_->isEnabled()) {
+    std::cout << "|-->loaded engine from: "
+              << sixdrepnet_pipeline_ptr_->getEnginePath() << std::endl;
+    std::cout << "|--> is initialized successfully." << std::endl;
+  } else {
+    std::cout << "|--> disabled." << std::endl;
+  }
+  std::cout << "|____________________________" << std::endl;
+
   arcface_pipeline_ptr_ = std::make_unique<ArcFacePipeline>(config_);
   std::cout << "[ArcFacePipeline]:" << std::endl;
   if (arcface_pipeline_ptr_->isEnabled()) {
@@ -76,6 +87,9 @@ void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
   }
   if (scrfd_pipeline_ptr_) {
     scrfd_pipeline_ptr_->process(rgb, perception_result, frame_context);
+  }
+  if (sixdrepnet_pipeline_ptr_) {
+    sixdrepnet_pipeline_ptr_->process(rgb, frame_context, perception_result);
   }
   if (arcface_pipeline_ptr_) {
     arcface_pipeline_ptr_->process(rgb, frame_context, perception_result);

@@ -13,6 +13,7 @@
 #include "pipeline/arcface_pipeline.hpp"
 #include "pipeline/iou_tracker.hpp"
 #include "pipeline/scrfd_pipeline.hpp"
+#include "pipeline/sixdrepnet_pipeline.hpp"
 #include "pipeline/yolo_pipeline.hpp"
 
 #include "trt_infer_msgs/msg/perception_result.hpp"
@@ -25,7 +26,9 @@ private:
   YAML::Node config_;                               // 完整的 Pipeline YAML 配置
   std::unique_ptr<YOLOPipeline> yolo_pipeline_ptr_; // 人体检测与距离估计模块
   std::unique_ptr<IouTracker> iou_tracker_ptr_;     // 人体框时序追踪模块
-  std::unique_ptr<SCRFDPipeline> scrfd_pipeline_ptr_;     // 人脸检测模块
+  std::unique_ptr<SCRFDPipeline> scrfd_pipeline_ptr_; // 人脸检测模块
+  std::unique_ptr<SixDRepNetPipeline>
+      sixdrepnet_pipeline_ptr_;                           // 头部姿态估计模块
   std::unique_ptr<ArcFacePipeline> arcface_pipeline_ptr_; // 人脸识别模块
   int frame_number_{0}; // Pipeline 已处理的帧编号
 
@@ -46,11 +49,11 @@ public:
   /**
    * @brief 处理一组 RGB-D 图像并生成统一感知结果。
    *
-   * 调用顺序为 YOLO、IoU Tracker、SCRFD、ArcFace。
+   * 调用顺序为 YOLO、IoU Tracker、SCRFD、SixDRepNet、ArcFace。
    *
    * @param rgb 当前帧 BGR 彩色图像。
    * @param depth 当前帧以米为单位的浮点深度图像。
-   * @param perception_result 输出人体、轨迹、人脸和身份识别结果。
+   * @param perception_result 输出人体、轨迹、人脸、头姿和身份识别结果。
    */
   void process(const cv::Mat &rgb, const cv::Mat &depth,
                PerceptionResult &perception_result);

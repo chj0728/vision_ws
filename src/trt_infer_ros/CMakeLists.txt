@@ -76,6 +76,7 @@ add_library(perception_ros_component SHARED
   src/pipeline/arcface_pipeline.cpp
   src/pipeline/iou_tracker.cpp
   src/pipeline/scrfd_pipeline.cpp
+  src/pipeline/sixdrepnet_pipeline.cpp
   src/pipeline/yolo_pipeline.cpp
 )
 configure_component(perception_ros_component)
