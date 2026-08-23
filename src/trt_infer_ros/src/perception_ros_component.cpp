@@ -1,6 +1,84 @@
 #include "perception_ros_component.hpp"
 
+#include <array>
+#include <cmath>
+
 namespace perception_ros_component {
+
+namespace {
+
+void drawHeadPoseBox(cv::Mat &image, const cv::Rect2f &face_bbox, float yaw,
+                     float pitch, float roll) {
+  constexpr float kDegreesToRadians = CV_PI / 180.0F;
+  const float yaw_rad = yaw * kDegreesToRadians;
+  const float pitch_rad = pitch * kDegreesToRadians;
+  const float roll_rad = roll * kDegreesToRadians;
+  const float side = std::min(face_bbox.width, face_bbox.height) * 0.7F;
+  const float focal_length = side * 3.0F;
+  const cv::Point2f center(face_bbox.x + face_bbox.width * 0.5F,
+                           face_bbox.y + face_bbox.height * 0.5F);
+
+  const float cos_yaw = std::cos(yaw_rad);
+  const float sin_yaw = std::sin(yaw_rad);
+  const float cos_pitch = std::cos(pitch_rad);
+  const float sin_pitch = std::sin(pitch_rad);
+  const float cos_roll = std::cos(roll_rad);
+  const float sin_roll = std::sin(roll_rad);
+  const cv::Matx33f rotation(
+      cos_roll * cos_yaw,
+      cos_roll * sin_yaw * sin_pitch - sin_roll * cos_pitch,
+      cos_roll * sin_yaw * cos_pitch + sin_roll * sin_pitch,
+      sin_roll * cos_yaw,
+      sin_roll * sin_yaw * sin_pitch + cos_roll * cos_pitch,
+      sin_roll * sin_yaw * cos_pitch - cos_roll * sin_pitch, -sin_yaw,
+      cos_yaw * sin_pitch, cos_yaw * cos_pitch);
+
+  const float half_side = side * 0.5F;
+  const auto project = [&](const cv::Vec3f &point) {
+    const cv::Vec3f rotated = rotation * point;
+    const float scale = focal_length / (focal_length + rotated[2]);
+    return cv::Point(cvRound(center.x + rotated[0] * scale),
+                     cvRound(center.y + rotated[1] * scale));
+  };
+  const std::array<cv::Vec3f, 8> vertices = {
+      cv::Vec3f{-half_side, -half_side, -half_side},
+      cv::Vec3f{half_side, -half_side, -half_side},
+      cv::Vec3f{half_side, half_side, -half_side},
+      cv::Vec3f{-half_side, half_side, -half_side},
+      cv::Vec3f{-half_side, -half_side, half_side},
+      cv::Vec3f{half_side, -half_side, half_side},
+      cv::Vec3f{half_side, half_side, half_side},
+      cv::Vec3f{-half_side, half_side, half_side}};
+  std::array<cv::Point, 8> projected_vertices;
+  for (std::size_t index = 0; index < vertices.size(); ++index) {
+    projected_vertices[index] = project(vertices[index]);
+  }
+
+  constexpr std::array<std::array<int, 2>, 12> edges = {
+      {{{0, 1}}, {{1, 2}}, {{2, 3}}, {{3, 0}}, {{4, 5}}, {{5, 6}},
+       {{6, 7}}, {{7, 4}}, {{0, 4}}, {{1, 5}}, {{2, 6}}, {{3, 7}}}};
+  for (const auto &edge : edges) {
+    cv::line(image, projected_vertices[edge[0]], projected_vertices[edge[1]],
+             cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+  }
+
+  const cv::Point projected_origin = project(cv::Vec3f(0.0F, 0.0F, 0.0F));
+  const float axis_length = side * 0.9F;
+  const std::array<cv::Vec3f, 3> axes = {
+      cv::Vec3f(axis_length, 0.0F, 0.0F),
+      cv::Vec3f(0.0F, axis_length, 0.0F),
+      cv::Vec3f(0.0F, 0.0F, axis_length)};
+  // OpenCV uses BGR: X is red, Y is green, and Z is blue as in RViz TF.
+  const std::array<cv::Scalar, 3> axis_colors = {
+      cv::Scalar(0, 0, 255), cv::Scalar(0, 255, 0),
+      cv::Scalar(255, 0, 0)};
+  for (std::size_t index = 0; index < axes.size(); ++index) {
+    cv::arrowedLine(image, projected_origin, project(axes[index]),
+                    axis_colors[index], 2, cv::LINE_AA, 0, 0.2);
+  }
+}
+
+} // namespace
 
 PerceptionRosComponent::PerceptionRosComponent(
     const rclcpp::NodeOptions &options)
@@ -169,13 +247,13 @@ void PerceptionRosComponent::processColorDepth(
 
   // const auto start_time = std::chrono::steady_clock::now();
 
-  // Check if there are any subscribers for the perception result topic
-  if (perception_result_pub_->get_subscription_count() == 0) {
-    RCLCPP_WARN(this->get_logger(),
-                "No subscribers for topic [%s], skipping processing.",
-                perception_result_topic_.c_str());
-    return;
-  }
+  // // Check if there are any subscribers for the perception result topic
+  // if (perception_result_pub_->get_subscription_count() == 0) {
+  //   RCLCPP_WARN(this->get_logger(),
+  //               "No subscribers for topic [%s], skipping processing.",
+  //               perception_result_topic_.c_str());
+  //   return;
+  // }
 
   // 检查消息是否为空
   if (!color_msg || !depth_msg) {
@@ -220,7 +298,7 @@ void PerceptionRosComponent::processColorDepth(
     return;
   }
 
-  // 处理图像数据并发布感知结果
+  // 处理图像数据
   trt_infer_msgs::msg::PerceptionResult perception_result;
   perception_result.header = color_msg->header;
   perception_result.image_width = static_cast<uint32_t>(color_image_mat.cols);
@@ -228,7 +306,18 @@ void PerceptionRosComponent::processColorDepth(
 
   perception_pipeline_ptr_->process(color_image_mat, depth_image_mat,
                                     perception_result);
-  perception_result_pub_->publish(perception_result);
+
+  // 发布感知结果
+  if (perception_result_pub_->get_subscription_count() > 0) {
+    RCLCPP_INFO(this->get_logger(),
+                "Publishing perception result with %zu persons detected.",
+                perception_result.persons.size());
+    perception_result_pub_->publish(perception_result);
+  } else {
+    RCLCPP_WARN(
+        this->get_logger(),
+        "No subscribers for perception result topic, skipping publish.");
+  }
 
   // 新增带感知信息的彩色图像发布
   // 图像格式: sensor_msgs::msg::Image
@@ -247,6 +336,10 @@ void PerceptionRosComponent::processColorDepth(
   // fy1 = fy0 + perception_result.persons[i].face_detection.face_bbox.h
   // 3. 绘制 track_id
   // 绘制在人体bbox的左上角，文本内容为 perception_result.persons[i].track_id
+  // 4. 绘制 基于 yaw, pitch, roll 的 box
+  // yaw = perception_result.persons[i].head_pose.yaw
+  // pitch = perception_result.persons[i].head_pose.pitch
+  // roll = perception_result.persons[i].head_pose.roll
   if (color_bbox_pub_->get_subscription_count() > 0) {
     cv::Mat color_image_with_bbox = color_image_mat.clone();
     for (const auto &person : perception_result.persons) {
@@ -272,6 +365,18 @@ void PerceptionRosComponent::processColorDepth(
       cv::putText(color_image_with_bbox, std::to_string(track_id),
                   cv::Point(body_bbox.x, body_bbox.y - 10),
                   cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(255, 0, 0), 4);
+      
+      // 4. 绘制基于 yaw, pitch, roll 的 box
+      const auto &head_pose = person.head_pose;
+      if (face_bbox.w > 0 && face_bbox.h > 0 &&
+          std::isfinite(head_pose.yaw) && std::isfinite(head_pose.pitch) &&
+          std::isfinite(head_pose.roll)) {
+        drawHeadPoseBox(
+            color_image_with_bbox,
+            cv::Rect2f(face_bbox.x, face_bbox.y, face_bbox.w, face_bbox.h),
+            head_pose.yaw, head_pose.pitch, head_pose.roll);
+      }
+
     }
     sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
         cv_bridge::CvImage(color_msg->header, "bgr8", color_image_with_bbox)

@@ -9,6 +9,17 @@
 - 支持模块开关、引擎文件名、引擎路径、最小人脸尺寸和人脸框扩展比例配置。
 - 在总 Pipeline 中按 SCRFD → SixDRepNet → ArcFace 顺序执行，使 ArcFace 可使用当前帧头姿进行质量门控。
 - 更新 CMakeLists.txt 和 pipeline.yaml，默认从 models/sixdrepnet 目录加载模型，模块默认关闭。
+- `/perception/color_bbox` 图像会在人脸框中心绘制白色头部姿态立方体和局部坐标轴，用于直观观察 SixDRepNet 输出。
+
+### 姿态可视化与坐标约定
+
+图像坐标系遵循相机光学坐标约定：X 轴向右、Y 轴向下、Z 轴指向图像内部。姿态框的局部坐标轴颜色与 RViz TF 保持一致：X 为红色、Y 为绿色、Z 为蓝色。
+
+- yaw：绕 Y 轴旋转，表示左右转头；正值向右转，负值向左转。
+- pitch：绕 X 轴旋转，表示上下点头；正值低头，负值抬头。
+- roll：绕 Z 轴旋转，表示左右侧倾；正值向右侧倾，负值向左侧倾。
+
+三个角度会组合生效，彩色箭头显示的是旋转后的头部局部坐标系方向。
 
 ```bash
 YOLOPipeline
