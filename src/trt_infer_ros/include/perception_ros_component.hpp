@@ -21,6 +21,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
+#include <trt_infer_msgs/msg/interaction_result.hpp>
 #include <trt_infer_msgs/msg/perception_result.hpp>
 
 #include <cv_bridge/cv_bridge.h>
@@ -31,6 +33,68 @@
 #include <yaml-cpp/yaml.h>
 
 #include "perception_pipeline.hpp"
+
+struct InteractionStruct {
+  InteractionStruct() = default;
+  InteractionStruct(const float &ayaw, const float &apitch,
+                    const float &amax_dist, const float &amin_dist,
+                    const float &tyaw, const float &tpitch,
+                    const float &tmax_dist, const float &tmin_dist)
+      : attention_yaw_deg(ayaw), attention_pitch_deg(apitch),
+        attention_max_distance_m(amax_dist),
+        attention_min_distance_m(amin_dist), talking_yaw_deg(tyaw),
+        talking_pitch_deg(tpitch), talking_max_distance_m(tmax_dist),
+        talking_min_distance_m(tmin_dist) {}
+  float attention_yaw_deg{0.f};
+  float attention_pitch_deg{0.f};
+  float attention_max_distance_m{0.f};
+  float attention_min_distance_m{0.f};
+
+  float talking_yaw_deg{0.f};
+  float talking_pitch_deg{0.f};
+  float talking_max_distance_m{0.f};
+  float talking_min_distance_m{0.f};
+
+  void update(const float &ayaw, const float &apitch, const float &amax_dist,
+              const float &amin_dist, const float &tyaw, const float &tpitch,
+              const float &tmax_dist, const float &tmin_dist) {
+    attention_yaw_deg = ayaw;
+    attention_pitch_deg = apitch;
+    attention_max_distance_m = amax_dist;
+    attention_min_distance_m = amin_dist;
+    talking_yaw_deg = tyaw;
+    talking_pitch_deg = tpitch;
+    talking_max_distance_m = tmax_dist;
+    talking_min_distance_m = tmin_dist;
+  }
+
+  bool isAttention(const float &yaw, const float &pitch,
+                   const float &distance) const {
+    if (distance <= 0.f || distance > attention_max_distance_m ||
+        distance < attention_min_distance_m)
+      return false;
+    return std::abs(yaw) <= attention_yaw_deg &&
+           std::abs(pitch) <= attention_pitch_deg;
+  }
+
+  bool isTalking(const float &yaw, const float &pitch,
+                 const float &distance) const {
+    if (distance <= 0.f || distance > talking_max_distance_m ||
+        distance < talking_min_distance_m)
+      return false;
+    return std::abs(yaw) <= talking_yaw_deg &&
+           std::abs(pitch) <= talking_pitch_deg;
+  }
+
+  uint8_t getInteractionStatus(const float &yaw, const float &pitch,
+                               const float &distance) const {
+    if (isAttention(yaw, pitch, distance))
+      return 1; // Attention
+    if (isTalking(yaw, pitch, distance))
+      return 2; // Talking
+    return 0;   // None
+  }
+};
 
 namespace perception_ros_component {
 
@@ -150,6 +214,26 @@ public:
     }
   }
 
+  /**
+   * @brief 在图像上绘制感知结果
+   *
+   * @param image
+   * @param person_meta
+   */
+  void
+  drawPerceptionResultOnImage(cv::Mat &image,
+                              const trt_infer_msgs::msg::PersonMeta &person);
+
+  /**
+   * @brief 更新交互结果消息
+   *
+   * @param interaction_result
+   * @param person
+   */
+  void updateInteractionResult(
+      trt_infer_msgs::msg::InteractionResult &interaction_result,
+      const trt_infer_msgs::msg::PersonMeta &person);
+
 private:
   // config path
   std::string pipeline_config_path_;
@@ -187,6 +271,13 @@ private:
   cv::Mat depth_f32_buf_; //
   float depth_scale_to_meters_{
       0.001f}; // 深度图像的缩放因子，将深度值从毫米转换为米
+
+  // Interaction status parameters
+  std::string interaction_result_topic_;
+  rclcpp::Publisher<trt_infer_msgs::msg::InteractionResult>::SharedPtr
+      interaction_result_pub_;
+  InteractionStruct interaction_struct_; // Stores the parameters for attention
+                                         // and talking detection
 };
 
 } // namespace perception_ros_component

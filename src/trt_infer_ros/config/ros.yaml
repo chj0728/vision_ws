@@ -8,10 +8,11 @@
     processing_rate_hz: 10.0
     color_bbox_topic: /camera/color/image_bbox
 
-    # Interaction detection parameters
+    # Interaction status parameters
     ## details in src/trt_infer_msgs/msg/InteractionResult.msg
     interaction_result_topic: /interaction_result
-
+    ## yaw：表示左右转头的角度，pitch：表示上下点头的角度
+    ## max_distance：表示检测的最大距离，min_distance：表示检测的最小距离
     attention_yaw_deg: 55.0
     attention_pitch_deg: 40.0
     attention_max_distance_m: 4.0
