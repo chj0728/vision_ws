@@ -17,6 +17,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/HeadPose.msg"
   "msg/PerceptionResult.msg"
   "msg/PersonMeta.msg"
+  "msg/InteractionResult.msg"
 
   DEPENDENCIES std_msgs
 )

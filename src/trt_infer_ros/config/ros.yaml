@@ -7,3 +7,17 @@
     sync_queue_size: 1
     processing_rate_hz: 10.0
     color_bbox_topic: /camera/color/image_bbox
+
+    # Interaction detection parameters
+    ## details in src/trt_infer_msgs/msg/InteractionResult.msg
+    interaction_result_topic: /interaction_result
+
+    attention_yaw_deg: 55.0
+    attention_pitch_deg: 40.0
+    attention_max_distance_m: 4.0
+    attention_min_distance_m: 0.1
+
+    talking_yaw_deg: 30.0
+    talking_pitch_deg: 25.0
+    talking_max_distance_m: 2.5
+    talking_min_distance_m: 0.1
