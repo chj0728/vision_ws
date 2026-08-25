@@ -17,6 +17,14 @@
     </tr>
 </table>
 
+## 目录结构
+
+![目录结构](./doc/directory.png)
+
+## 视觉推理流程
+
+![视觉推理流程](./doc/inference_flow.png)
+
 ## 依赖安装
 
 ```bash
