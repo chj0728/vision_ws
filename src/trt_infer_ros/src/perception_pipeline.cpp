@@ -74,8 +74,13 @@ void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
   std::cout << "[PerceptionPipeline] Processing RGB and depth images..."
             << std::endl;
+
   perception_result.persons.clear();
-  perception_result.body_pipeline_ms = 0.0f;
+  perception_result.body_detection_ms = 0.0f;
+  perception_result.face_detection_ms = 0.0f;
+  perception_result.head_pose_ms = 0.0f;
+  perception_result.face_recog_ms = 0.0f;
+
   if (yolo_pipeline_ptr_) {
     yolo_pipeline_ptr_->process(rgb, depth, perception_result);
   }

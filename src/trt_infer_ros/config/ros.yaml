@@ -1,7 +1,10 @@
 /perception_ros_node:
   ros__parameters:
-    color_image_topic: /camera/rgb/image_color
-    depth_image_topic: /camera/depth/image
+    color_image_topic: /camera/color/image_raw # /camera/rgb/image_color
+    depth_image_topic: /camera/depth/image_raw # /camera/depth/image
+    use_compressed_images: true
+    color_compressed_topic: /camera/color/image_raw/compressed
+    depth_compressed_topic: /camera/depth/image_raw/compressedDepth
     perception_result_topic: /perception_result
     hard_sync: false
     sync_queue_size: 1

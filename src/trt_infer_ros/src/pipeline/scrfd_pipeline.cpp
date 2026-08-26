@@ -205,4 +205,5 @@ void SCRFDPipeline::process(
       std::chrono::high_resolution_clock::now() - start_time;
   std::cout << "[SCRFDPipeline] Processing time: " << duration.count() << " ms"
             << std::endl;
+  perception_result.face_detection_ms = duration.count();
 }

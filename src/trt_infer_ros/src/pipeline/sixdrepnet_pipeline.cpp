@@ -34,8 +34,8 @@ cv::Rect expandFaceRect(const cv::Rect_<float> &face_rect, float expand_ratio,
 
 /** @brief 将头姿消息恢复为未执行或推理失败状态。 */
 void clearHeadPose(trt_infer_msgs::msg::HeadPose &head_pose) {
-  head_pose.yaw = kInvalidHeadPoseDeg;
-  head_pose.pitch = kInvalidHeadPoseDeg;
+  head_pose.yaw = 0.0f;
+  head_pose.pitch = 0.0f;
   head_pose.roll = 0.0f;
 }
 
@@ -138,4 +138,5 @@ void SixDRepNetPipeline::process(
       std::chrono::high_resolution_clock::now() - start_time;
   std::cout << "[SixDRepNetPipeline] Processing time: " << duration.count()
             << " ms" << std::endl;
+  perception_result.head_pose_ms = duration.count();
 }

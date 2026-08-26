@@ -3,11 +3,128 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 
 namespace perception_ros_component {
 
 namespace {
 
+struct CompressedDepthHeader {
+  int32_t format;
+  float depth_quant_a;
+  float depth_quant_b;
+};
+
+static_assert(sizeof(CompressedDepthHeader) == 12);
+
+/**
+ * @brief 解码压缩的彩色图像消息
+ *
+ * @param message 压缩的彩色图像消息
+ * @param color_image 解码后的彩色图像
+ * @return true 解码成功
+ * @return false 解码失败
+ */
+bool decodeCompressedColor(const sensor_msgs::msg::CompressedImage &message,
+                           cv::Mat &color_image) {
+  if (message.data.empty() ||
+      message.data.size() >
+          static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return false;
+  }
+  const cv::Mat encoded(1, static_cast<int>(message.data.size()), CV_8UC1,
+                        const_cast<uint8_t *>(message.data.data()));
+  color_image = cv::imdecode(encoded, cv::IMREAD_COLOR);
+  return !color_image.empty();
+}
+
+/**
+ * @brief 解码压缩的深度图像消息
+ *
+ * @param message 压缩的深度图像消息
+ * @param depth_image 解码后的深度图像
+ * @param encoding 解码后的深度图像编码格式
+ * @return true 解码成功
+ * @return false 解码失败
+ */
+bool decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
+                           cv::Mat &depth_image, std::string &encoding) {
+  constexpr std::array<uint8_t, 8> kPngSignature = {0x89, 0x50, 0x4e, 0x47,
+                                                    0x0d, 0x0a, 0x1a, 0x0a};
+  const auto png_begin =
+      std::search(message.data.begin(), message.data.end(),
+                  kPngSignature.begin(), kPngSignature.end());
+  if (png_begin == message.data.end()) {
+    return false;
+  }
+
+  const std::size_t png_offset =
+      static_cast<std::size_t>(std::distance(message.data.begin(), png_begin));
+  const std::size_t png_size = message.data.size() - png_offset;
+  if (png_size > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return false;
+  }
+
+  const cv::Mat encoded(
+      1, static_cast<int>(png_size), CV_8UC1,
+      const_cast<uint8_t *>(message.data.data() + png_offset));
+  const cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_UNCHANGED);
+  if (decoded.empty()) {
+    return false;
+  }
+
+  std::string normalized_format = message.format;
+  std::transform(normalized_format.begin(), normalized_format.end(),
+                 normalized_format.begin(), [](unsigned char value) {
+                   return static_cast<char>(std::tolower(value));
+                 });
+  if (normalized_format.find("32fc1") == std::string::npos) {
+    if (decoded.type() != CV_16UC1) {
+      return false;
+    }
+    depth_image = decoded;
+    encoding = sensor_msgs::image_encodings::TYPE_16UC1;
+    return true;
+  }
+
+  if (png_offset < sizeof(CompressedDepthHeader) ||
+      decoded.type() != CV_16UC1) {
+    return false;
+  }
+  CompressedDepthHeader header{};
+  std::memcpy(&header, message.data.data(), sizeof(header));
+  if (header.format != 0 || !std::isfinite(header.depth_quant_a) ||
+      !std::isfinite(header.depth_quant_b) || header.depth_quant_a <= 0.0F) {
+    return false;
+  }
+
+  depth_image.create(decoded.rows, decoded.cols, CV_32FC1);
+  const float invalid_depth = std::numeric_limits<float>::quiet_NaN();
+  for (int row = 0; row < decoded.rows; ++row) {
+    const auto *source = decoded.ptr<uint16_t>(row);
+    auto *destination = depth_image.ptr<float>(row);
+    for (int col = 0; col < decoded.cols; ++col) {
+      const float denominator =
+          static_cast<float>(source[col]) - header.depth_quant_b;
+      destination[col] = source[col] != 0 && denominator > 0.0F
+                             ? header.depth_quant_a / denominator
+                             : invalid_depth;
+    }
+  }
+  encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+  return true;
+}
+
+/**
+ * @brief 在图像上绘制头部姿态框
+ *
+ * @param image 图像
+ * @param face_bbox 人脸边界框
+ * @param yaw 偏航角
+ * @param pitch 俯仰角
+ * @param roll 翻滚角
+ */
 void drawHeadPoseBox(cv::Mat &image, const cv::Rect2f &face_bbox, float yaw,
                      float pitch, float roll) {
   constexpr float kDegreesToRadians = CV_PI / 180.0F;
@@ -99,26 +216,46 @@ PerceptionRosComponent::PerceptionRosComponent(
       rmw_qos_profile_default);
   image_qos.keep_last(1);
   const rmw_qos_profile_t qos_profile = image_qos.get_rmw_qos_profile();
-  color_image_sub_.subscribe(this, color_image_topic_, qos_profile);
-  depth_image_sub_.subscribe(this, depth_image_topic_, qos_profile);
-
-  // Set up synchronizer for RGB and depth images
-  if (hard_sync_) {
-    sync_exact_ =
-        std::make_unique<message_filters::Synchronizer<ExactSyncPolicy>>(
-            ExactSyncPolicy(sync_queue_size_), color_image_sub_,
-            depth_image_sub_);
-    sync_exact_->registerCallback(
-        std::bind(&PerceptionRosComponent::onSyncedColorDepth, this,
-                  std::placeholders::_1, std::placeholders::_2));
+  if (use_compressed_images_) {
+    color_compressed_sub_.subscribe(this, color_compressed_topic_, qos_profile);
+    depth_compressed_sub_.subscribe(this, depth_compressed_topic_, qos_profile);
+    if (hard_sync_) {
+      compressed_sync_exact_ = std::make_unique<
+          message_filters::Synchronizer<CompressedExactSyncPolicy>>(
+          CompressedExactSyncPolicy(sync_queue_size_), color_compressed_sub_,
+          depth_compressed_sub_);
+      compressed_sync_exact_->registerCallback(
+          std::bind(&PerceptionRosComponent::onSyncedCompressedColorDepth, this,
+                    std::placeholders::_1, std::placeholders::_2));
+    } else {
+      compressed_sync_approx_ = std::make_unique<
+          message_filters::Synchronizer<CompressedApproximateSyncPolicy>>(
+          CompressedApproximateSyncPolicy(sync_queue_size_),
+          color_compressed_sub_, depth_compressed_sub_);
+      compressed_sync_approx_->registerCallback(
+          std::bind(&PerceptionRosComponent::onSyncedCompressedColorDepth, this,
+                    std::placeholders::_1, std::placeholders::_2));
+    }
   } else {
-    sync_approx_ =
-        std::make_unique<message_filters::Synchronizer<ApproximateSyncPolicy>>(
-            ApproximateSyncPolicy(sync_queue_size_), color_image_sub_,
-            depth_image_sub_);
-    sync_approx_->registerCallback(
-        std::bind(&PerceptionRosComponent::onSyncedColorDepth, this,
-                  std::placeholders::_1, std::placeholders::_2));
+    color_image_sub_.subscribe(this, color_image_topic_, qos_profile);
+    depth_image_sub_.subscribe(this, depth_image_topic_, qos_profile);
+    if (hard_sync_) {
+      sync_exact_ =
+          std::make_unique<message_filters::Synchronizer<ExactSyncPolicy>>(
+              ExactSyncPolicy(sync_queue_size_), color_image_sub_,
+              depth_image_sub_);
+      sync_exact_->registerCallback(
+          std::bind(&PerceptionRosComponent::onSyncedColorDepth, this,
+                    std::placeholders::_1, std::placeholders::_2));
+    } else {
+      sync_approx_ = std::make_unique<
+          message_filters::Synchronizer<ApproximateSyncPolicy>>(
+          ApproximateSyncPolicy(sync_queue_size_), color_image_sub_,
+          depth_image_sub_);
+      sync_approx_->registerCallback(
+          std::bind(&PerceptionRosComponent::onSyncedColorDepth, this,
+                    std::placeholders::_1, std::placeholders::_2));
+    }
   }
 
   // 设置定时器以处理最新的RGB和深度图像
@@ -130,7 +267,8 @@ PerceptionRosComponent::PerceptionRosComponent(
       std::bind(&PerceptionRosComponent::processLatestColorDepth, this));
 
   RCLCPP_INFO(this->get_logger(),
-              "[PerceptionRosComponent] is initialized successfully.");
+              "[PerceptionRosComponent] initialized with %s RGB-D topics.",
+              use_compressed_images_ ? "compressed" : "raw");
 }
 
 PerceptionRosComponent::~PerceptionRosComponent() = default;
@@ -157,7 +295,7 @@ void PerceptionRosComponent::loadParameters() {
                  pipeline_config_path_.c_str(), e.what());
   }
 
-  // Declare and get parameters
+  // Declare parameters
   this->declare_parameter<bool>("hard_sync", false);
   this->declare_parameter<int>("sync_queue_size", 10);
   this->declare_parameter<double>("processing_rate_hz", 10.0);
@@ -166,11 +304,17 @@ void PerceptionRosComponent::loadParameters() {
                                        "/camera/color/image_raw");
   this->declare_parameter<std::string>("depth_image_topic",
                                        "/camera/depth/image_raw");
+  this->declare_parameter<bool>("use_compressed_images", false);
+  this->declare_parameter<std::string>("color_compressed_topic",
+                                       "/camera/color/image_raw/compressed");
+  this->declare_parameter<std::string>(
+      "depth_compressed_topic", "/camera/depth/image_raw/compressedDepth");
   this->declare_parameter<std::string>("perception_result_topic",
                                        "/perception/result");
   this->declare_parameter<std::string>("color_bbox_topic",
                                        "/perception/color_bbox");
 
+  // Get parameters
   hard_sync_ = this->get_parameter("hard_sync").as_bool();
   sync_queue_size_ = this->get_parameter("sync_queue_size").as_int();
   processing_rate_hz_ = this->get_parameter("processing_rate_hz").as_double();
@@ -179,6 +323,12 @@ void PerceptionRosComponent::loadParameters() {
   }
   color_image_topic_ = this->get_parameter("color_image_topic").as_string();
   depth_image_topic_ = this->get_parameter("depth_image_topic").as_string();
+  use_compressed_images_ =
+      this->get_parameter("use_compressed_images").as_bool();
+  color_compressed_topic_ =
+      this->get_parameter("color_compressed_topic").as_string();
+  depth_compressed_topic_ =
+      this->get_parameter("depth_compressed_topic").as_string();
 
   // Create publisher for perception results
   perception_result_topic_ =
@@ -258,44 +408,79 @@ void PerceptionRosComponent::onSyncedColorDepth(
   latest_depth_msg_ = depth_msg;
 }
 
+void PerceptionRosComponent::onSyncedCompressedColorDepth(
+    const CompressedImage::ConstSharedPtr &color_msg,
+    const CompressedImage::ConstSharedPtr &depth_msg) {
+  std::lock_guard<std::mutex> lock(latest_frames_mutex_);
+  latest_compressed_color_msg_ = color_msg;
+  latest_compressed_depth_msg_ = depth_msg;
+}
+
 void PerceptionRosComponent::processLatestColorDepth() {
+  CompressedImage::ConstSharedPtr compressed_color_msg;
+  CompressedImage::ConstSharedPtr compressed_depth_msg;
   Image::ConstSharedPtr color_msg;
   Image::ConstSharedPtr depth_msg;
   {
     std::lock_guard<std::mutex> lock(latest_frames_mutex_);
-    color_msg = latest_color_msg_;
-    depth_msg = latest_depth_msg_;
-    latest_color_msg_.reset();
-    latest_depth_msg_.reset();
+    if (use_compressed_images_) {
+      compressed_color_msg = latest_compressed_color_msg_;
+      compressed_depth_msg = latest_compressed_depth_msg_;
+      latest_compressed_color_msg_.reset();
+      latest_compressed_depth_msg_.reset();
+    } else {
+      color_msg = latest_color_msg_;
+      depth_msg = latest_depth_msg_;
+      latest_color_msg_.reset();
+      latest_depth_msg_.reset();
+    }
   }
 
-  if (color_msg && depth_msg) {
+  if (use_compressed_images_ && compressed_color_msg && compressed_depth_msg) {
+    processCompressedColorDepth(compressed_color_msg, compressed_depth_msg);
+  } else if (!use_compressed_images_ && color_msg && depth_msg) {
     processColorDepth(color_msg, depth_msg);
   }
+}
+
+void PerceptionRosComponent::processCompressedColorDepth(
+    const CompressedImage::ConstSharedPtr &color_msg,
+    const CompressedImage::ConstSharedPtr &depth_msg) {
+  if (!color_msg || !depth_msg) {
+    return;
+  }
+
+  cv::Mat color_image;
+  cv::Mat depth_image;
+  std::string depth_encoding;
+  if (!decodeCompressedColor(*color_msg, color_image)) {
+    RCLCPP_WARN(this->get_logger(), "Failed to decode compressed color image.");
+    return;
+  }
+  if (!decodeCompressedDepth(*depth_msg, depth_image, depth_encoding)) {
+    RCLCPP_WARN(this->get_logger(), "Failed to decode compressed depth image.");
+    return;
+  }
+
+  const auto raw_color =
+      cv_bridge::CvImage(color_msg->header, sensor_msgs::image_encodings::BGR8,
+                         color_image)
+          .toImageMsg();
+  const auto raw_depth =
+      cv_bridge::CvImage(depth_msg->header, depth_encoding, depth_image)
+          .toImageMsg();
+  processColorDepth(raw_color, raw_depth);
 }
 
 void PerceptionRosComponent::processColorDepth(
     const Image::ConstSharedPtr &color_msg,
     const Image::ConstSharedPtr &depth_msg) {
 
-  // const auto start_time = std::chrono::steady_clock::now();
-
-  // // Check if there are any subscribers for the perception result topic
-  // if (perception_result_pub_->get_subscription_count() == 0) {
-  //   RCLCPP_WARN(this->get_logger(),
-  //               "No subscribers for topic [%s], skipping processing.",
-  //               perception_result_topic_.c_str());
-  //   return;
-  // }
-
   // 检查消息是否为空
   if (!color_msg || !depth_msg) {
     RCLCPP_WARN(this->get_logger(), "Received null color or depth image.");
     return;
   }
-
-  // RCLCPP_INFO(this->get_logger(), "Received synchronized color and depth
-  // images.");
 
   cv::Mat color_image_mat;
 
@@ -340,16 +525,15 @@ void PerceptionRosComponent::processColorDepth(
   perception_pipeline_ptr_->process(color_image_mat, depth_image_mat,
                                     perception_result);
 
+  // 打印感知结果到控制台
+  if (perception_result.persons.size() > 0) {
+    printPerceptionResult(perception_result);
+  }
+
   // 发布感知结果
   if (perception_result_pub_->get_subscription_count() > 0) {
-    RCLCPP_INFO(this->get_logger(),
-                "Publishing perception result with %zu persons detected.",
-                perception_result.persons.size());
+
     perception_result_pub_->publish(perception_result);
-  } else {
-    RCLCPP_WARN(
-        this->get_logger(),
-        "No subscribers for perception result topic, skipping publish.");
   }
 
   cv::Mat color_image_with_bbox = color_image_mat.clone();
@@ -481,6 +665,27 @@ void PerceptionRosComponent::updateInteractionResult(
     }
   }
 }
+
+void PerceptionRosComponent::printPerceptionResult(
+    const trt_infer_msgs::msg::PerceptionResult &result) {
+  RCLCPP_INFO(this->get_logger(),
+              "Perception Result: \n%zu persons detected, "
+              "\nbody_detection_ms: %.4f, \nface_detection_ms: %.4f, "
+              "\nhead_pose_ms: %.4f, \nface_recog_ms: %.4f",
+              result.persons.size(), result.body_detection_ms,
+              result.face_detection_ms, result.head_pose_ms,
+              result.face_recog_ms);
+  for (const auto &person : result.persons) {
+    RCLCPP_INFO(this->get_logger(),
+                "Person track_id: %d, \nbody_distance: %.2f m, "
+                "\nhead_pose (yaw: %.2f, pitch: %.2f, "
+                "roll: %.2f)",
+                person.track_id, person.body_detection.body_distance,
+                person.head_pose.yaw, person.head_pose.pitch,
+                person.head_pose.roll);
+  }
+}
+
 } // namespace perception_ros_component
 
 #include <rclcpp_components/register_node_macro.hpp>

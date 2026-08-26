@@ -11,6 +11,8 @@
 #ifndef PERCEPTION_ROS_COMPONENT_HPP
 #define PERCEPTION_ROS_COMPONENT_HPP
 
+#include <algorithm>
+#include <cctype>
 #include <mutex>
 #include <string>
 
@@ -20,6 +22,7 @@
 #include <message_filters/synchronizer.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
 #include <trt_infer_msgs/msg/interaction_result.hpp>
@@ -99,9 +102,15 @@ struct InteractionStruct {
 namespace perception_ros_component {
 
 using Image = sensor_msgs::msg::Image;
+using CompressedImage = sensor_msgs::msg::CompressedImage;
 using ExactSyncPolicy = message_filters::sync_policies::ExactTime<Image, Image>;
 using ApproximateSyncPolicy =
     message_filters::sync_policies::ApproximateTime<Image, Image>;
+using CompressedExactSyncPolicy =
+    message_filters::sync_policies::ExactTime<CompressedImage, CompressedImage>;
+using CompressedApproximateSyncPolicy =
+    message_filters::sync_policies::ApproximateTime<CompressedImage,
+                                                    CompressedImage>;
 
 class PerceptionRosComponent : public rclcpp::Node {
 public:
@@ -136,6 +145,16 @@ public:
                           const Image::ConstSharedPtr &depth_msg);
 
   /**
+   * @brief 同步压缩RGB和深度图像的回调函数
+   *
+   * @param color_msg
+   * @param depth_msg
+   */
+  void onSyncedCompressedColorDepth(
+      const CompressedImage::ConstSharedPtr &color_msg,
+      const CompressedImage::ConstSharedPtr &depth_msg);
+
+  /**
    * @brief 同步RGB和深度图像的处理函数，定时器回调
    *
    */
@@ -149,6 +168,16 @@ public:
    */
   void processColorDepth(const Image::ConstSharedPtr &color_msg,
                          const Image::ConstSharedPtr &depth_msg);
+
+  /**
+   * @brief 处理压缩RGB和深度图像，进行感知推理并发布结果
+   *
+   * @param color_msg
+   * @param depth_msg
+   */
+  void
+  processCompressedColorDepth(const CompressedImage::ConstSharedPtr &color_msg,
+                              const CompressedImage::ConstSharedPtr &depth_msg);
 
   /**
    * @brief 将字符串转换为小写
@@ -234,6 +263,14 @@ public:
       trt_infer_msgs::msg::InteractionResult &interaction_result,
       const trt_infer_msgs::msg::PersonMeta &person);
 
+  /**
+   * @brief 打印感知结果到控制台
+   *
+   * @param result
+   */
+  void
+  printPerceptionResult(const trt_infer_msgs::msg::PerceptionResult &result);
+
 private:
   // config path
   std::string pipeline_config_path_;
@@ -256,15 +293,27 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr color_bbox_pub_;
 
   // Subscribers for RGB and depth images
+  bool use_compressed_images_{false};
   std::string color_image_topic_;
   std::string depth_image_topic_;
+  std::string color_compressed_topic_;
+  std::string depth_compressed_topic_;
   message_filters::Subscriber<Image> color_image_sub_;
   message_filters::Subscriber<Image> depth_image_sub_;
+  message_filters::Subscriber<CompressedImage> color_compressed_sub_;
+  message_filters::Subscriber<CompressedImage> depth_compressed_sub_;
   std::unique_ptr<message_filters::Synchronizer<ExactSyncPolicy>> sync_exact_;
   std::unique_ptr<message_filters::Synchronizer<ApproximateSyncPolicy>>
       sync_approx_;
+  std::unique_ptr<message_filters::Synchronizer<CompressedExactSyncPolicy>>
+      compressed_sync_exact_;
+  std::unique_ptr<
+      message_filters::Synchronizer<CompressedApproximateSyncPolicy>>
+      compressed_sync_approx_;
   Image::ConstSharedPtr latest_color_msg_;
   Image::ConstSharedPtr latest_depth_msg_;
+  CompressedImage::ConstSharedPtr latest_compressed_color_msg_;
+  CompressedImage::ConstSharedPtr latest_compressed_depth_msg_;
   std::mutex latest_frames_mutex_;
   rclcpp::TimerBase::SharedPtr processing_timer_;
 

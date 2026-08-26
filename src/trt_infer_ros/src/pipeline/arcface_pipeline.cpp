@@ -287,6 +287,7 @@ void ArcFacePipeline::process(
       std::chrono::high_resolution_clock::now() - start_time;
   std::cout << "[ArcFacePipeline] Processing time: "
             << pipeline_duration.count() << " ms" << std::endl;
+  perception_result.face_recog_ms = pipeline_duration.count();
 }
 
 bool ArcFacePipeline::updatePersonName(const std::string &uuid,
