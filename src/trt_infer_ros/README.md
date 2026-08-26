@@ -1,5 +1,23 @@
 # Pipelines 更新记录
 
+## PerceptionRosComponent 压缩图像订阅 - 2026-08-26
+
+- `perception_ros_component` 新增压缩 RGB-D 图像订阅模式。
+- 支持同步订阅 `sensor_msgs/msg/CompressedImage` 类型的彩色图像和深度图像。
+- 彩色压缩图像支持通过 OpenCV 解码 JPEG、PNG 等格式。
+- 深度压缩图像支持 `16UC1; compressedDepth png` 和 `32FC1; compressedDepth png` 格式，并统一转换为感知 Pipeline 使用的米制浮点深度图。
+- 保留原始 `sensor_msgs/msg/Image` 订阅模式，以及精确同步和近似同步策略。
+- 在 `config/ros.yaml` 中新增以下参数：
+
+```yaml
+use_compressed_images: false
+color_compressed_topic: /camera/color/image_raw/compressed
+depth_compressed_topic: /camera/depth/image_raw/compressedDepth
+```
+
+- 当 `use_compressed_images` 为 `false` 时，订阅 `color_image_topic` 和 `depth_image_topic` 指定的原始图像话题。
+- 当 `use_compressed_images` 为 `true` 时，仅订阅 `color_compressed_topic` 和 `depth_compressed_topic` 指定的压缩图像话题。
+
 ## SixDRepNet 头部姿态模块迁移 - 2026-08-21
 
 - 新增 sixdrepnet_pipeline.hpp 和 sixdrepnet_pipeline.cpp。
@@ -15,11 +33,19 @@
 
 图像坐标系遵循相机光学坐标约定：X 轴向右、Y 轴向下、Z 轴指向图像内部。姿态框的局部坐标轴颜色与 RViz TF 保持一致：X 为红色、Y 为绿色、Z 为蓝色。
 
-- yaw：绕 Y 轴旋转，表示左右转头；正值向右转，负值向左转。
-- pitch：绕 X 轴旋转，表示上下点头；正值低头，负值抬头。
+根据实际测试，以现实世界中人的第一视角为参考：
+
+- yaw：绕 Y 轴旋转，表示左右转头；正值向左转，负值向右转。
+- pitch：绕 X 轴旋转，表示上下点头；正值向上抬头，负值向下低头。
 - roll：绕 Z 轴旋转，表示左右侧倾；正值向右侧倾，负值向左侧倾。
 
-三个角度会组合生效，彩色箭头显示的是旋转后的头部局部坐标系方向。
+  `yaw` > 0：人向左转头
+  `pitch` > 0：人向上抬头
+  `roll` > 0：人向右侧倾
+
+`drawHeadPoseBox()` 按 $R=R_z(roll)R_y(yaw)R_x(pitch)$ 重建 SixDRepNet 输出的旋转矩阵，不额外改变角度符号。三个角度会组合生效，彩色箭头显示的是旋转后的局部坐标轴，其投影方向不应直接解释为人的转头或点头方向。
+
+## Pipeline 执行顺序更新 - 2026-08-21
 
 ```bash
 YOLOPipeline
