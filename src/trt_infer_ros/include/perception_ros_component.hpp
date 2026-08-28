@@ -11,7 +11,6 @@
 #ifndef PERCEPTION_ROS_COMPONENT_HPP
 #define PERCEPTION_ROS_COMPONENT_HPP
 
-#include <algorithm>
 #include <cctype>
 #include <mutex>
 #include <string>
@@ -119,21 +118,60 @@ public:
   ~PerceptionRosComponent() override;
 
   /**
-   * @brief Load parameters from a YAML configuration file.
+   * @brief Declare parameters for the ROS node.
    *
    */
-  void loadParameters();
+  void declareParameters();
 
   /**
-   * @brief 解码深度图像消息为浮点米单位的深度图像
+   * @brief Get parameters for the ROS node.
    *
-   * @param depth_msg
-   * @param depth_meters
-   * @return true
-   * @return false
    */
-  bool decodeToFloatMeters(const Image::ConstSharedPtr &depth_msg,
-                           cv::Mat &depth_meters);
+  void getParameters();
+
+  /**
+   * @brief 初始化订阅、发布器以及其他实现细节
+   * 
+   * @note This function should be called after declaring and getting parameters.
+   */
+  void initImplementation();
+
+  // /**
+  //  * @brief 解码深度图像消息为浮点米单位的深度图像
+  //  *
+  //  * @param depth_msg
+  //  * @param depth_meters
+  //  * @return true
+  //  * @return false
+  //  */
+  // bool decodeToFloatMeters(const Image::ConstSharedPtr &depth_msg,
+  //                          cv::Mat &depth_meters) {
+  //   if (!depth_msg)
+  //     return false;
+
+  //   const std::string encoding = toLower(depth_msg->encoding);
+  //   if (encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
+  //       encoding == "16uc1") {
+  //     const auto depth = cv_bridge::toCvShare(
+  //         depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
+  //     if (depth_f32_buf_.rows != static_cast<int>(depth_msg->height) ||
+  //         depth_f32_buf_.cols != static_cast<int>(depth_msg->width)) {
+  //       depth_f32_buf_.create(depth_msg->height, depth_msg->width, CV_32F);
+  //     }
+  //     depth->image.convertTo(depth_f32_buf_, CV_32F,
+  //                            static_cast<double>(depth_scale_to_meters_));
+  //     depth_meters = depth_f32_buf_;
+  //     return true;
+  //   }
+  //   if (encoding == sensor_msgs::image_encodings::TYPE_32FC1 ||
+  //       encoding == "32fc1") {
+  //     depth_meters = cv_bridge::toCvShare(
+  //                        depth_msg, sensor_msgs::image_encodings::TYPE_32FC1)
+  //                        ->image;
+  //     return true;
+  //   }
+  //   return false;
+  // }
 
   /**
    * @brief 同步RGB和深度图像的回调函数
@@ -180,70 +218,6 @@ public:
                               const CompressedImage::ConstSharedPtr &depth_msg);
 
   /**
-   * @brief 将字符串转换为小写
-   *
-   * @param value
-   * @return std::string
-   */
-  std::string toLower(std::string value) {
-    std::transform(
-        value.begin(), value.end(), value.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return value;
-  }
-
-  /**
-   * @brief 检查图像消息的编码是否为JPEG格式
-   *
-   * @param encoding
-   * @return true
-   * @return false
-   */
-  bool isJpegInImageMsg(const std::string &encoding) {
-    const std::string normalized = toLower(encoding);
-    return normalized.find("jpeg") != std::string::npos ||
-           normalized.find("jpg") != std::string::npos ||
-           normalized.find("mjpeg") != std::string::npos ||
-           normalized.find("mjpg") != std::string::npos;
-  }
-
-  /**
-   * @brief 确保图像为BGR8格式,
-   *        Converts accepted camera image layouts into the BGR8 format required
-   * by YOLO.
-   *
-   * @param image
-   */
-  void ensureBgrU8C3(cv::Mat &image) {
-    if (image.empty() || image.cols <= 0 || image.rows <= 0) {
-      image.release();
-      return;
-    }
-    try {
-      if (image.depth() != CV_8U) {
-        cv::Mat u8;
-        image.convertTo(u8, CV_8U);
-        image = std::move(u8);
-      }
-      if (image.channels() == 3)
-        return;
-
-      cv::Mat bgr;
-      if (image.channels() == 1) {
-        cv::cvtColor(image, bgr, cv::COLOR_GRAY2BGR);
-      } else if (image.channels() == 4) {
-        cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
-      } else {
-        image.release();
-        return;
-      }
-      image = std::move(bgr);
-    } catch (const cv::Exception &) {
-      image.release();
-    }
-  }
-
-  /**
    * @brief 在图像上绘制感知结果
    *
    * @param image
@@ -279,8 +253,8 @@ private:
   std::unique_ptr<PerceptionPipeline> perception_pipeline_ptr_;
 
   // synchronization parameters
-  bool hard_sync_{false}; // Whether to use exact synchronization or approximate
-                          // synchronization
+  bool hard_sync_{false};   // Whether to use exact synchronization or
+                            // approximate synchronization
   int sync_queue_size_{10}; // Queue size for message synchronization
   double processing_rate_hz_{
       10.0}; // Processing rate in Hz for the timer callback

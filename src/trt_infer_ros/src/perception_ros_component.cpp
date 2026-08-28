@@ -1,221 +1,154 @@
 #include "perception_ros_component.hpp"
+#include "perception_common.hpp"
 
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 
 namespace perception_ros_component {
-
-namespace {
-
-struct CompressedDepthHeader {
-  int32_t format;
-  float depth_quant_a;
-  float depth_quant_b;
-};
-
-static_assert(sizeof(CompressedDepthHeader) == 12);
-
-/**
- * @brief 解码压缩的彩色图像消息
- *
- * @param message 压缩的彩色图像消息
- * @param color_image 解码后的彩色图像
- * @return true 解码成功
- * @return false 解码失败
- */
-bool decodeCompressedColor(const sensor_msgs::msg::CompressedImage &message,
-                           cv::Mat &color_image) {
-  if (message.data.empty() ||
-      message.data.size() >
-          static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    return false;
-  }
-  const cv::Mat encoded(1, static_cast<int>(message.data.size()), CV_8UC1,
-                        const_cast<uint8_t *>(message.data.data()));
-  color_image = cv::imdecode(encoded, cv::IMREAD_COLOR);
-  return !color_image.empty();
-}
-
-/**
- * @brief 解码压缩的深度图像消息
- *
- * @param message 压缩的深度图像消息
- * @param depth_image 解码后的深度图像
- * @param encoding 解码后的深度图像编码格式
- * @return true 解码成功
- * @return false 解码失败
- */
-bool decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
-                           cv::Mat &depth_image, std::string &encoding) {
-  constexpr std::array<uint8_t, 8> kPngSignature = {0x89, 0x50, 0x4e, 0x47,
-                                                    0x0d, 0x0a, 0x1a, 0x0a};
-  const auto png_begin =
-      std::search(message.data.begin(), message.data.end(),
-                  kPngSignature.begin(), kPngSignature.end());
-  if (png_begin == message.data.end()) {
-    return false;
-  }
-
-  const std::size_t png_offset =
-      static_cast<std::size_t>(std::distance(message.data.begin(), png_begin));
-  const std::size_t png_size = message.data.size() - png_offset;
-  if (png_size > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    return false;
-  }
-
-  const cv::Mat encoded(
-      1, static_cast<int>(png_size), CV_8UC1,
-      const_cast<uint8_t *>(message.data.data() + png_offset));
-  const cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_UNCHANGED);
-  if (decoded.empty()) {
-    return false;
-  }
-
-  std::string normalized_format = message.format;
-  std::transform(normalized_format.begin(), normalized_format.end(),
-                 normalized_format.begin(), [](unsigned char value) {
-                   return static_cast<char>(std::tolower(value));
-                 });
-  if (normalized_format.find("32fc1") == std::string::npos) {
-    if (decoded.type() != CV_16UC1) {
-      return false;
-    }
-    depth_image = decoded;
-    encoding = sensor_msgs::image_encodings::TYPE_16UC1;
-    return true;
-  }
-
-  if (png_offset < sizeof(CompressedDepthHeader) ||
-      decoded.type() != CV_16UC1) {
-    return false;
-  }
-  CompressedDepthHeader header{};
-  std::memcpy(&header, message.data.data(), sizeof(header));
-  if (header.format != 0 || !std::isfinite(header.depth_quant_a) ||
-      !std::isfinite(header.depth_quant_b) || header.depth_quant_a <= 0.0F) {
-    return false;
-  }
-
-  depth_image.create(decoded.rows, decoded.cols, CV_32FC1);
-  const float invalid_depth = std::numeric_limits<float>::quiet_NaN();
-  for (int row = 0; row < decoded.rows; ++row) {
-    const auto *source = decoded.ptr<uint16_t>(row);
-    auto *destination = depth_image.ptr<float>(row);
-    for (int col = 0; col < decoded.cols; ++col) {
-      const float denominator =
-          static_cast<float>(source[col]) - header.depth_quant_b;
-      destination[col] = source[col] != 0 && denominator > 0.0F
-                             ? header.depth_quant_a / denominator
-                             : invalid_depth;
-    }
-  }
-  encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-  return true;
-}
-
-/**
- * @brief 在图像上绘制头部姿态框
- *
- * @param image 图像
- * @param face_bbox 人脸边界框
- * @param yaw 偏航角
- * @param pitch 俯仰角
- * @param roll 翻滚角
- */
-void drawHeadPoseBox(cv::Mat &image, const cv::Rect2f &face_bbox, float yaw,
-                     float pitch, float roll) {
-  constexpr float kDegreesToRadians = CV_PI / 180.0F;
-  const float yaw_rad = yaw * kDegreesToRadians;
-  const float pitch_rad = pitch * kDegreesToRadians;
-  const float roll_rad = roll * kDegreesToRadians;
-  const float side = std::min(face_bbox.width, face_bbox.height) * 0.7F;
-  const float focal_length = side * 3.0F;
-  const cv::Point2f center(face_bbox.x + face_bbox.width * 0.5F,
-                           face_bbox.y + face_bbox.height * 0.5F);
-
-  const float cos_yaw = std::cos(yaw_rad);
-  const float sin_yaw = std::sin(yaw_rad);
-  const float cos_pitch = std::cos(pitch_rad);
-  const float sin_pitch = std::sin(pitch_rad);
-  const float cos_roll = std::cos(roll_rad);
-  const float sin_roll = std::sin(roll_rad);
-  const cv::Matx33f rotation(
-      cos_roll * cos_yaw, cos_roll * sin_yaw * sin_pitch - sin_roll * cos_pitch,
-      cos_roll * sin_yaw * cos_pitch + sin_roll * sin_pitch, sin_roll * cos_yaw,
-      sin_roll * sin_yaw * sin_pitch + cos_roll * cos_pitch,
-      sin_roll * sin_yaw * cos_pitch - cos_roll * sin_pitch, -sin_yaw,
-      cos_yaw * sin_pitch, cos_yaw * cos_pitch);
-
-  const float half_side = side * 0.5F;
-  const auto project = [&](const cv::Vec3f &point) {
-    const cv::Vec3f rotated = rotation * point;
-    const float scale = focal_length / (focal_length + rotated[2]);
-    return cv::Point(cvRound(center.x + rotated[0] * scale),
-                     cvRound(center.y + rotated[1] * scale));
-  };
-  const std::array<cv::Vec3f, 8> vertices = {
-      cv::Vec3f{-half_side, -half_side, -half_side},
-      cv::Vec3f{half_side, -half_side, -half_side},
-      cv::Vec3f{half_side, half_side, -half_side},
-      cv::Vec3f{-half_side, half_side, -half_side},
-      cv::Vec3f{-half_side, -half_side, half_side},
-      cv::Vec3f{half_side, -half_side, half_side},
-      cv::Vec3f{half_side, half_side, half_side},
-      cv::Vec3f{-half_side, half_side, half_side}};
-  std::array<cv::Point, 8> projected_vertices;
-  for (std::size_t index = 0; index < vertices.size(); ++index) {
-    projected_vertices[index] = project(vertices[index]);
-  }
-
-  constexpr std::array<std::array<int, 2>, 12> edges = {{{{0, 1}},
-                                                         {{1, 2}},
-                                                         {{2, 3}},
-                                                         {{3, 0}},
-                                                         {{4, 5}},
-                                                         {{5, 6}},
-                                                         {{6, 7}},
-                                                         {{7, 4}},
-                                                         {{0, 4}},
-                                                         {{1, 5}},
-                                                         {{2, 6}},
-                                                         {{3, 7}}}};
-  for (const auto &edge : edges) {
-    cv::line(image, projected_vertices[edge[0]], projected_vertices[edge[1]],
-             cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
-  }
-
-  const cv::Point projected_origin = project(cv::Vec3f(0.0F, 0.0F, 0.0F));
-  const float axis_length = side * 0.9F;
-  const std::array<cv::Vec3f, 3> axes = {cv::Vec3f(axis_length, 0.0F, 0.0F),
-                                         cv::Vec3f(0.0F, axis_length, 0.0F),
-                                         cv::Vec3f(0.0F, 0.0F, axis_length)};
-  // OpenCV uses BGR: X is red, Y is green, and Z is blue as in RViz TF.
-  const std::array<cv::Scalar, 3> axis_colors = {
-      cv::Scalar(0, 0, 255), cv::Scalar(0, 255, 0), cv::Scalar(255, 0, 0)};
-  for (std::size_t index = 0; index < axes.size(); ++index) {
-    cv::arrowedLine(image, projected_origin, project(axes[index]),
-                    axis_colors[index], 2, cv::LINE_AA, 0, 0.2);
-  }
-}
-
-} // namespace
 
 PerceptionRosComponent::PerceptionRosComponent(
     const rclcpp::NodeOptions &options)
     : Node("perception_ros_component", options) {
 
-  // Load parameters from YAML configuration file
-  loadParameters();
+  declareParameters();
 
-  // Set up subscribers for RGB and depth images
-  rclcpp::QoS image_qos(
-      rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
-      rmw_qos_profile_default);
-  image_qos.keep_last(1);
-  const rmw_qos_profile_t qos_profile = image_qos.get_rmw_qos_profile();
+  getParameters();
+
+  initImplementation();
+}
+
+PerceptionRosComponent::~PerceptionRosComponent() = default;
+
+void PerceptionRosComponent::declareParameters() {
+
+  // Load parameters from a YAML configuration file
+  this->declare_parameter<std::string>("pipeline_config_path", "pipeline.yaml");
+
+  // Declare perception parameters
+  this->declare_parameter<bool>("hard_sync", false);
+  this->declare_parameter<int>("sync_queue_size", 10);
+  this->declare_parameter<double>("processing_rate_hz", 10.0);
+
+  // Declare topics for RGB and depth images
+  this->declare_parameter<std::string>("color_image_topic",
+                                       "/camera/color/image_raw");
+  this->declare_parameter<std::string>("depth_image_topic",
+                                       "/camera/depth/image_raw");
+  this->declare_parameter<bool>("use_compressed_images", false);
+  this->declare_parameter<std::string>("color_compressed_topic",
+                                       "/camera/color/image_raw/compressed");
+  this->declare_parameter<std::string>(
+      "depth_compressed_topic", "/camera/depth/image_raw/compressedDepth");
+  this->declare_parameter<std::string>("perception_result_topic",
+                                       "/perception/result");
+  this->declare_parameter<std::string>("color_bbox_topic",
+                                       "/perception/color_bbox");
+
+  // Declare interaction_result parameters
+  this->declare_parameter<std::string>("interaction_result_topic",
+                                       "/interaction_result");
+  this->declare_parameter<double>("attention_yaw_deg", 55.0);
+  this->declare_parameter<double>("attention_pitch_deg", 40.0);
+  this->declare_parameter<double>("attention_max_distance_m", 4.0);
+  this->declare_parameter<double>("attention_min_distance_m", 0.1);
+  this->declare_parameter<double>("talking_yaw_deg", 30.0);
+  this->declare_parameter<double>("talking_pitch_deg", 25.0);
+  this->declare_parameter<double>("talking_max_distance_m", 2.5);
+  this->declare_parameter<double>("talking_min_distance_m", 0.1);
+}
+
+void PerceptionRosComponent::getParameters() {
+
+  // pipeline configuration path
+  pipeline_config_path_ =
+      this->get_parameter("pipeline_config_path").as_string();
+  RCLCPP_INFO(this->get_logger(), "Loaded pipelines parameters from %s",
+              pipeline_config_path_.c_str());
+
+  // 是否启用严格同步
+  hard_sync_ = this->get_parameter("hard_sync").as_bool();
+  // 同步队列大小
+  sync_queue_size_ = this->get_parameter("sync_queue_size").as_int();
+  // 推理频率（Hz）
+  processing_rate_hz_ = this->get_parameter("processing_rate_hz").as_double();
+  if (processing_rate_hz_ <= 0.0) {
+    RCLCPP_WARN(this->get_logger(), "Processing rate must be greater than "
+                                    "zero. Using default value 1.0 Hz.");
+    processing_rate_hz_ = 1.0;
+  }
+
+  // 订阅的图像数据话题名
+  color_image_topic_ = this->get_parameter("color_image_topic").as_string();
+  depth_image_topic_ = this->get_parameter("depth_image_topic").as_string();
+  use_compressed_images_ =
+      this->get_parameter("use_compressed_images").as_bool();
+  color_compressed_topic_ =
+      this->get_parameter("color_compressed_topic").as_string();
+  depth_compressed_topic_ =
+      this->get_parameter("depth_compressed_topic").as_string();
+
+  // 发布带感知结果的图像话题名
+  color_bbox_topic_ = this->get_parameter("color_bbox_topic").as_string();
+
+  // 感知推理结果 和 交互逻辑结果话题名
+  perception_result_topic_ =
+      this->get_parameter("perception_result_topic").as_string();
+  interaction_result_topic_ =
+      this->get_parameter("interaction_result_topic").as_string();
+  interaction_struct_.update(
+      this->get_parameter("attention_yaw_deg").as_double(),
+      this->get_parameter("attention_pitch_deg").as_double(),
+      this->get_parameter("attention_max_distance_m").as_double(),
+      this->get_parameter("attention_min_distance_m").as_double(),
+      this->get_parameter("talking_yaw_deg").as_double(),
+      this->get_parameter("talking_pitch_deg").as_double(),
+      this->get_parameter("talking_max_distance_m").as_double(),
+      this->get_parameter("talking_min_distance_m").as_double());
+}
+
+void PerceptionRosComponent::initImplementation() {
+  // Initialize subscribers, publishers, and other implementation details here
+
+  // Load parameters from the YAML file into the perception pipeline
+  try {
+
+    YAML::Node config = YAML::LoadFile(pipeline_config_path_);
+
+    perception_pipeline_ptr_ = std::make_unique<PerceptionPipeline>(config);
+
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "[PerceptionPipelines] Failed to load parameters from %s: %s",
+                 pipeline_config_path_.c_str(), e.what());
+  }
+
+  color_bbox_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+      color_bbox_topic_, rclcpp::QoS(10).reliable());
+
+  perception_result_pub_ =
+      this->create_publisher<trt_infer_msgs::msg::PerceptionResult>(
+          perception_result_topic_, rclcpp::QoS(10).reliable());
+
+  interaction_result_pub_ =
+      this->create_publisher<trt_infer_msgs::msg::InteractionResult>(
+          interaction_result_topic_, rclcpp::QoS(10).reliable());
+
+  // rclcpp::QoS image_qos(
+  //     rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
+  //     rmw_qos_profile_default);
+  // image_qos.keep_last(1);
+  // const rmw_qos_profile_t qos_profile = image_qos.get_rmw_qos_profile();
+
+  // SensorDataQoS
+  // 历史：KeepLast(5)、可靠性：BestEffort、耐久性：Volatile
+  // 高频传感器数据（激光雷达、IMU、摄像头等）
+  const rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
+
+  // default QoS profile for custom use
+  // 历史：KeepLast(10)、可靠性：Reliable、耐久性：Volatile
+  // const rmw_qos_profile_t qos_profile = rmw_qos_profile_default;
+
   if (use_compressed_images_) {
     color_compressed_sub_.subscribe(this, color_compressed_topic_, qos_profile);
     depth_compressed_sub_.subscribe(this, depth_compressed_topic_, qos_profile);
@@ -269,134 +202,6 @@ PerceptionRosComponent::PerceptionRosComponent(
   RCLCPP_INFO(this->get_logger(),
               "[PerceptionRosComponent] initialized with %s RGB-D topics.",
               use_compressed_images_ ? "compressed" : "raw");
-}
-
-PerceptionRosComponent::~PerceptionRosComponent() = default;
-
-void PerceptionRosComponent::loadParameters() {
-
-  // Load parameters from a YAML configuration file
-  this->declare_parameter<std::string>("pipeline_config_path", "pipeline.yaml");
-  pipeline_config_path_ =
-      this->get_parameter("pipeline_config_path").as_string();
-  RCLCPP_INFO(this->get_logger(), "Loaded pipelines parameters from %s",
-              pipeline_config_path_.c_str());
-
-  // Load parameters from the YAML file into the perception pipeline
-  try {
-
-    YAML::Node config = YAML::LoadFile(pipeline_config_path_);
-
-    perception_pipeline_ptr_ = std::make_unique<PerceptionPipeline>(config);
-
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR(this->get_logger(),
-                 "[PerceptionPipelines] Failed to load parameters from %s: %s",
-                 pipeline_config_path_.c_str(), e.what());
-  }
-
-  // Declare parameters
-  this->declare_parameter<bool>("hard_sync", false);
-  this->declare_parameter<int>("sync_queue_size", 10);
-  this->declare_parameter<double>("processing_rate_hz", 10.0);
-
-  this->declare_parameter<std::string>("color_image_topic",
-                                       "/camera/color/image_raw");
-  this->declare_parameter<std::string>("depth_image_topic",
-                                       "/camera/depth/image_raw");
-  this->declare_parameter<bool>("use_compressed_images", false);
-  this->declare_parameter<std::string>("color_compressed_topic",
-                                       "/camera/color/image_raw/compressed");
-  this->declare_parameter<std::string>(
-      "depth_compressed_topic", "/camera/depth/image_raw/compressedDepth");
-  this->declare_parameter<std::string>("perception_result_topic",
-                                       "/perception/result");
-  this->declare_parameter<std::string>("color_bbox_topic",
-                                       "/perception/color_bbox");
-
-  // Get parameters
-  hard_sync_ = this->get_parameter("hard_sync").as_bool();
-  sync_queue_size_ = this->get_parameter("sync_queue_size").as_int();
-  processing_rate_hz_ = this->get_parameter("processing_rate_hz").as_double();
-  if (processing_rate_hz_ <= 0.0) {
-    throw std::invalid_argument("processing_rate_hz must be greater than zero");
-  }
-  color_image_topic_ = this->get_parameter("color_image_topic").as_string();
-  depth_image_topic_ = this->get_parameter("depth_image_topic").as_string();
-  use_compressed_images_ =
-      this->get_parameter("use_compressed_images").as_bool();
-  color_compressed_topic_ =
-      this->get_parameter("color_compressed_topic").as_string();
-  depth_compressed_topic_ =
-      this->get_parameter("depth_compressed_topic").as_string();
-
-  // Create publisher for perception results
-  perception_result_topic_ =
-      this->get_parameter("perception_result_topic").as_string();
-  perception_result_pub_ =
-      create_publisher<trt_infer_msgs::msg::PerceptionResult>(
-          perception_result_topic_, rclcpp::QoS(10).reliable());
-
-  // Create publisher for color image with bounding boxes
-  color_bbox_topic_ = this->get_parameter("color_bbox_topic").as_string();
-  color_bbox_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
-      color_bbox_topic_, rclcpp::QoS(10));
-
-  // Load interaction status parameters
-  this->declare_parameter<std::string>("interaction_result_topic",
-                                       "/interaction_result");
-  this->declare_parameter<double>("attention_yaw_deg", 55.0);
-  this->declare_parameter<double>("attention_pitch_deg", 40.0);
-  this->declare_parameter<double>("attention_max_distance_m", 4.0);
-  this->declare_parameter<double>("attention_min_distance_m", 0.1);
-  this->declare_parameter<double>("talking_yaw_deg", 30.0);
-  this->declare_parameter<double>("talking_pitch_deg", 25.0);
-  this->declare_parameter<double>("talking_max_distance_m", 2.5);
-  this->declare_parameter<double>("talking_min_distance_m", 0.1);
-
-  interaction_result_topic_ =
-      this->get_parameter("interaction_result_topic").as_string();
-  interaction_result_pub_ =
-      create_publisher<trt_infer_msgs::msg::InteractionResult>(
-          interaction_result_topic_, rclcpp::QoS(10).reliable());
-  interaction_struct_.update(
-      this->get_parameter("attention_yaw_deg").as_double(),
-      this->get_parameter("attention_pitch_deg").as_double(),
-      this->get_parameter("attention_max_distance_m").as_double(),
-      this->get_parameter("attention_min_distance_m").as_double(),
-      this->get_parameter("talking_yaw_deg").as_double(),
-      this->get_parameter("talking_pitch_deg").as_double(),
-      this->get_parameter("talking_max_distance_m").as_double(),
-      this->get_parameter("talking_min_distance_m").as_double());
-}
-
-bool PerceptionRosComponent::decodeToFloatMeters(
-    const Image::ConstSharedPtr &depth_msg, cv::Mat &depth_meters) {
-  if (!depth_msg)
-    return false;
-
-  const std::string encoding = toLower(depth_msg->encoding);
-  if (encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
-      encoding == "16uc1") {
-    const auto depth = cv_bridge::toCvShare(
-        depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
-    if (depth_f32_buf_.rows != static_cast<int>(depth_msg->height) ||
-        depth_f32_buf_.cols != static_cast<int>(depth_msg->width)) {
-      depth_f32_buf_.create(depth_msg->height, depth_msg->width, CV_32F);
-    }
-    depth->image.convertTo(depth_f32_buf_, CV_32F,
-                           static_cast<double>(depth_scale_to_meters_));
-    depth_meters = depth_f32_buf_;
-    return true;
-  }
-  if (encoding == sensor_msgs::image_encodings::TYPE_32FC1 ||
-      encoding == "32fc1") {
-    depth_meters = cv_bridge::toCvShare(
-                       depth_msg, sensor_msgs::image_encodings::TYPE_32FC1)
-                       ->image;
-    return true;
-  }
-  return false;
 }
 
 void PerceptionRosComponent::onSyncedColorDepth(
