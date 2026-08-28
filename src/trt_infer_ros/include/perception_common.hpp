@@ -2,8 +2,14 @@
 #define PERCEPTION_COMMON_HPP
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <limits>
 #include <string>
+#include <utility>
 
 #include <opencv2/opencv.hpp>
 
@@ -194,14 +200,12 @@ decodeCompressedColor(const sensor_msgs::msg::CompressedImage &message,
  * @brief 解码压缩的深度图像消息
  *
  * @param message 压缩的深度图像消息
- * @param depth_image 解码后的深度图像
- * @param encoding 解码后的深度图像编码格式
+ * @param depth_meters 解码后的米制浮点深度图像
  * @return true 解码成功
  * @return false 解码失败
  */
-inline bool
-decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
-                      cv::Mat &depth_image, std::string &encoding) {
+inline bool decodeCompressedDepthToFloatMeters(
+    const sensor_msgs::msg::CompressedImage &message, cv::Mat &depth_meters) {
   constexpr std::array<uint8_t, 8> kPngSignature = {0x89, 0x50, 0x4e, 0x47,
                                                     0x0d, 0x0a, 0x1a, 0x0a};
   const auto png_begin =
@@ -235,8 +239,7 @@ decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
     if (decoded.type() != CV_16UC1) {
       return false;
     }
-    depth_image = decoded;
-    encoding = sensor_msgs::image_encodings::TYPE_16UC1;
+    decoded.convertTo(depth_meters, CV_32F, 0.001);
     return true;
   }
 
@@ -251,11 +254,11 @@ decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
     return false;
   }
 
-  depth_image.create(decoded.rows, decoded.cols, CV_32FC1);
+  depth_meters.create(decoded.rows, decoded.cols, CV_32FC1);
   const float invalid_depth = std::numeric_limits<float>::quiet_NaN();
   for (int row = 0; row < decoded.rows; ++row) {
     const auto *source = decoded.ptr<uint16_t>(row);
-    auto *destination = depth_image.ptr<float>(row);
+    auto *destination = depth_meters.ptr<float>(row);
     for (int col = 0; col < decoded.cols; ++col) {
       const float denominator =
           static_cast<float>(source[col]) - header.depth_quant_b;
@@ -264,7 +267,6 @@ decodeCompressedDepth(const sensor_msgs::msg::CompressedImage &message,
                              : invalid_depth;
     }
   }
-  encoding = sensor_msgs::image_encodings::TYPE_32FC1;
   return true;
 }
 

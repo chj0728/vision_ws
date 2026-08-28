@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 namespace perception_ros_component {
 
@@ -256,25 +257,18 @@ void PerceptionRosComponent::processCompressedColorDepth(
   }
 
   cv::Mat color_image;
-  cv::Mat depth_image;
-  std::string depth_encoding;
+  cv::Mat depth_meters;
   if (!decodeCompressedColor(*color_msg, color_image)) {
     RCLCPP_WARN(this->get_logger(), "Failed to decode compressed color image.");
     return;
   }
-  if (!decodeCompressedDepth(*depth_msg, depth_image, depth_encoding)) {
+  if (!decodeCompressedDepthToFloatMeters(*depth_msg, depth_meters)) {
     RCLCPP_WARN(this->get_logger(), "Failed to decode compressed depth image.");
     return;
   }
 
-  const auto raw_color =
-      cv_bridge::CvImage(color_msg->header, sensor_msgs::image_encodings::BGR8,
-                         color_image)
-          .toImageMsg();
-  const auto raw_depth =
-      cv_bridge::CvImage(depth_msg->header, depth_encoding, depth_image)
-          .toImageMsg();
-  processColorDepth(raw_color, raw_depth);
+  processDecodedColorDepth(color_msg->header, std::move(color_image),
+                           depth_meters);
 }
 
 void PerceptionRosComponent::processColorDepth(
@@ -288,6 +282,7 @@ void PerceptionRosComponent::processColorDepth(
   }
 
   cv::Mat color_image_mat;
+  cv_bridge::CvImageConstPtr color_bridge;
 
   // 检查图像消息的编码是否为JPEG格式
   const bool is_jpeg =
@@ -300,34 +295,42 @@ void PerceptionRosComponent::processColorDepth(
                              const_cast<uint8_t *>(color_msg->data.data())),
                      cv::IMREAD_COLOR);
   } else {
-    color_image_mat =
-        cv_bridge::toCvShare(color_msg, sensor_msgs::image_encodings::BGR8)
-            ->image;
+    color_bridge =
+        cv_bridge::toCvShare(color_msg, sensor_msgs::image_encodings::BGR8);
+    color_image_mat = color_bridge->image;
   }
 
-  // 确保图像为BGR8格式
-  ensureBgrU8C3(color_image_mat);
-  if (color_image_mat.empty()) {
-    RCLCPP_WARN(this->get_logger(),
-                "Failed to convert color image to BGR8 format.");
-    return;
-  }
-
-  // 将深度图像解码为浮点米表示
-  cv::Mat depth_image_mat;
-  if (!decodeToFloatMeters(depth_msg, depth_image_mat)) {
+  cv::Mat depth_meters;
+  if (!decodeToFloatMeters(depth_msg, depth_meters)) {
     RCLCPP_WARN(this->get_logger(),
                 "Failed to decode depth image to float meters.");
     return;
   }
 
-  // 处理图像数据
-  trt_infer_msgs::msg::PerceptionResult perception_result;
-  perception_result.header = color_msg->header;
-  perception_result.image_width = static_cast<uint32_t>(color_image_mat.cols);
-  perception_result.image_height = static_cast<uint32_t>(color_image_mat.rows);
+  processDecodedColorDepth(color_msg->header, std::move(color_image_mat),
+                           depth_meters);
+}
 
-  perception_pipeline_ptr_->process(color_image_mat, depth_image_mat,
+void PerceptionRosComponent::processDecodedColorDepth(
+    const std_msgs::msg::Header &header, cv::Mat color_image,
+    const cv::Mat &depth_meters) {
+  ensureBgrU8C3(color_image);
+  if (color_image.empty()) {
+    RCLCPP_WARN(this->get_logger(),
+                "Failed to convert color image to BGR8 format.");
+    return;
+  }
+  if (depth_meters.empty() || depth_meters.type() != CV_32FC1) {
+    RCLCPP_WARN(this->get_logger(), "Depth image must use CV_32FC1 meters.");
+    return;
+  }
+
+  trt_infer_msgs::msg::PerceptionResult perception_result;
+  perception_result.header = header;
+  perception_result.image_width = static_cast<uint32_t>(color_image.cols);
+  perception_result.image_height = static_cast<uint32_t>(color_image.rows);
+
+  perception_pipeline_ptr_->process(color_image, depth_meters,
                                     perception_result);
 
   // 打印感知结果到控制台
@@ -341,10 +344,10 @@ void PerceptionRosComponent::processColorDepth(
     perception_result_pub_->publish(perception_result);
   }
 
-  cv::Mat color_image_with_bbox = color_image_mat.clone();
+  cv::Mat color_image_with_bbox = color_image.clone();
 
   trt_infer_msgs::msg::InteractionResult interaction_result_msg;
-  interaction_result_msg.header = color_msg->header;
+  interaction_result_msg.header = header;
   interaction_result_msg.closest_attention_distance = -1.0F;
   interaction_result_msg.closest_talking_distance = -1.0F;
 
@@ -356,8 +359,7 @@ void PerceptionRosComponent::processColorDepth(
   }
 
   sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
-      cv_bridge::CvImage(color_msg->header, "bgr8", color_image_with_bbox)
-          .toImageMsg();
+      cv_bridge::CvImage(header, "bgr8", color_image_with_bbox).toImageMsg();
   if (color_bbox_pub_->get_subscription_count() > 0) {
     color_bbox_pub_->publish(*color_bbox_msg);
   }

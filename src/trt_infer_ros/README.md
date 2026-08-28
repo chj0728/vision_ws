@@ -1,5 +1,27 @@
 # Pipelines 更新记录
 
+## PerceptionRosComponent 图像处理流程优化 - 2026-08-28
+
+- 新增 `processDecodedColorDepth()`，统一处理已经解码完成的 BGR 彩色图和米制浮点深度图。
+- 感知 Pipeline 调用、结果发布、交互状态计算、边界框绘制和结果图像发布集中到同一处理路径，减少原始图像和压缩图像分支中的重复代码。
+- 压缩图像处理不再执行 `cv::Mat → sensor_msgs/msg/Image → cv::Mat` 的重复转换。
+- 彩色压缩图像解码为 BGR `cv::Mat` 后直接进入感知处理流程。
+- `16UC1; compressedDepth png` 深度图解码后直接按 `0.001` 比例转换为米制 `CV_32FC1`。
+- `32FC1; compressedDepth png` 深度图完成逆深度恢复后直接输出米制 `CV_32FC1`。
+- 原始图像分支只负责将 ROS 图像消息转换为 OpenCV 矩阵，然后复用相同的 `processDecodedColorDepth()` 处理流程。
+- 对已经是 `BGR8` 的彩色图和 `32FC1` 的深度图保留共享数据视图，避免不必要的图像复制。
+- 保留 `cv_bridge::CvImageConstPtr` 的有效生命周期，避免转换生成的 `cv::Mat` 引用已经释放的临时数据。
+- `perception_common.hpp` 补充压缩图像解码及深度单位转换所需的标准库头文件，并移除组件中废弃的深度缓存成员和注释代码。
+- `CMakeLists.txt` 和 `package.xml` 新增显式的 `std_msgs` 依赖，用于共用处理入口传递图像消息头。
+
+优化后的处理流程：
+
+```text
+CompressedImage ──解码──┐
+                       ├─> BGR cv::Mat + CV_32FC1 depth ─> processDecodedColorDepth() ─> PerceptionPipeline
+sensor_msgs/Image ─转换─┘
+```
+
 ## PerceptionRosComponent 压缩图像订阅 - 2026-08-26
 
 - `perception_ros_component` 新增压缩 RGB-D 图像订阅模式。

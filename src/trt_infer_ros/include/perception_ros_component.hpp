@@ -23,6 +23,7 @@
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/header.hpp>
 #include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
 #include <trt_infer_msgs/msg/interaction_result.hpp>
 #include <trt_infer_msgs/msg/perception_result.hpp>
@@ -131,47 +132,11 @@ public:
 
   /**
    * @brief 初始化订阅、发布器以及其他实现细节
-   * 
-   * @note This function should be called after declaring and getting parameters.
+   *
+   * @note This function should be called after declaring and getting
+   * parameters.
    */
   void initImplementation();
-
-  // /**
-  //  * @brief 解码深度图像消息为浮点米单位的深度图像
-  //  *
-  //  * @param depth_msg
-  //  * @param depth_meters
-  //  * @return true
-  //  * @return false
-  //  */
-  // bool decodeToFloatMeters(const Image::ConstSharedPtr &depth_msg,
-  //                          cv::Mat &depth_meters) {
-  //   if (!depth_msg)
-  //     return false;
-
-  //   const std::string encoding = toLower(depth_msg->encoding);
-  //   if (encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
-  //       encoding == "16uc1") {
-  //     const auto depth = cv_bridge::toCvShare(
-  //         depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
-  //     if (depth_f32_buf_.rows != static_cast<int>(depth_msg->height) ||
-  //         depth_f32_buf_.cols != static_cast<int>(depth_msg->width)) {
-  //       depth_f32_buf_.create(depth_msg->height, depth_msg->width, CV_32F);
-  //     }
-  //     depth->image.convertTo(depth_f32_buf_, CV_32F,
-  //                            static_cast<double>(depth_scale_to_meters_));
-  //     depth_meters = depth_f32_buf_;
-  //     return true;
-  //   }
-  //   if (encoding == sensor_msgs::image_encodings::TYPE_32FC1 ||
-  //       encoding == "32fc1") {
-  //     depth_meters = cv_bridge::toCvShare(
-  //                        depth_msg, sensor_msgs::image_encodings::TYPE_32FC1)
-  //                        ->image;
-  //     return true;
-  //   }
-  //   return false;
-  // }
 
   /**
    * @brief 同步RGB和深度图像的回调函数
@@ -216,6 +181,17 @@ public:
   void
   processCompressedColorDepth(const CompressedImage::ConstSharedPtr &color_msg,
                               const CompressedImage::ConstSharedPtr &depth_msg);
+
+  /**
+   * @brief 处理解码后的RGB和深度图像，进行感知推理并发布结果
+   *
+   * @param header
+   * @param color_image
+   * @param depth_meters
+   */
+  void processDecodedColorDepth(const std_msgs::msg::Header &header,
+                                cv::Mat color_image,
+                                const cv::Mat &depth_meters);
 
   /**
    * @brief 在图像上绘制感知结果
@@ -290,10 +266,6 @@ private:
   CompressedImage::ConstSharedPtr latest_compressed_depth_msg_;
   std::mutex latest_frames_mutex_;
   rclcpp::TimerBase::SharedPtr processing_timer_;
-
-  cv::Mat depth_f32_buf_; //
-  float depth_scale_to_meters_{
-      0.001f}; // 深度图像的缩放因子，将深度值从毫米转换为米
 
   // Interaction status parameters
   std::string interaction_result_topic_;
