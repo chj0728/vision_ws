@@ -18,7 +18,7 @@ def generate_launch_description():
                     os.path.join(
                         get_package_share_directory("trt_infer_ros"),
                         "launch",
-                        "trt_infer_camera.launch.py",
+                        "camera.launch.py",
                     )
                 )
             ),
@@ -28,9 +28,10 @@ def generate_launch_description():
                     os.path.join(
                         get_package_share_directory("trt_infer_ros"),
                         "launch",
-                        "trt_infer_ros_node.launch.py",
+                        "perception.launch.py",
                     )
-                )
+                ),
+                launch_arguments={"use_composition": "True"}.items(),
             ),
         ]
     )

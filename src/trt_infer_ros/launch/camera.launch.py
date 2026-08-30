@@ -43,7 +43,7 @@ def generate_launch_description():
 
     return launch.LaunchDescription(
         [  # -------------- 全局环境变量设置（影响所有后续节点）------------------
-            SetEnvironmentVariable(name="RCUTILS_COLORIZED_OUTPUT", value="1"),
+            SetEnvironmentVariable(name="RCUTILS_COLORIZED_OUTPUT", value="0"),
             SetEnvironmentVariable(name="ROS_LOG_DIR", value=camera_log_dir),
             SetEnvironmentVariable(
                 name="RCUTILS_CONSOLE_OUTPUT_FORMAT",

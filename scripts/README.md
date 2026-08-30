@@ -1,6 +1,6 @@
-# vision_ws 构建脚本
+# vision_ws 脚本说明
 
-`build.sh` 用于统一构建 `vision_ws`，自动处理 ROS 2、CUDA、GPU 架构和 OpenCV 路径，避免不同平台上的环境冲突。
+本目录提供 `install.sh`、`build.sh` 和 `run.sh`，分别用于安装依赖、构建工作空间和启动视觉栈。
 
 ## 已验证平台
 
@@ -8,7 +8,27 @@
 2. x86_64、Ubuntu 22.04、CUDA 13.3、ROS 2 Humble、TensorRT 11.2.1。
 3. Jetson AGX Orin、JetPack 6.2。
 
-## 脚本处理步骤
+## 安装
+
+`install.sh` 安装系统依赖，并解压 OrbbecSDK 和 ROS 2 `rcutils` 开发包到工作空间的 `src/third_deps/`。脚本会调用 `sudo apt install`，执行时需要具备 sudo 权限。
+
+在工作空间根目录执行：
+
+```bash
+./scripts/install.sh
+```
+
+安装前请确认 `third/` 中存在所需的压缩包；若脚本没有执行权限：
+
+```bash
+chmod +x scripts/install.sh
+```
+
+## 构建
+
+`build.sh` 用于统一构建 `vision_ws`，自动处理 ROS 2、CUDA、GPU 架构和 OpenCV 路径，避免不同平台上的环境冲突。
+
+### 构建流程
 
 运行脚本时会依次执行：
 
@@ -23,7 +43,7 @@
 7. 将统一的 CUDA、CUDA 架构和 OpenCV 参数传递给工作空间内所有 CMake 功能包。
 8. 通过 `colcon build --symlink-install` 编译工作空间。
 
-## 基本使用
+### 基础构建
 
 在工作空间根目录执行：
 
@@ -43,7 +63,7 @@
 chmod +x scripts/build.sh
 ```
 
-## 手动指定环境
+### 手动指定构建环境
 
 ### 指定 CUDA Toolkit
 
@@ -104,7 +124,7 @@ TRT_OPENCV_DIR=/usr/lib/aarch64-linux-gnu/cmake/opencv4 \
 ./scripts/build.sh pure
 ```
 
-## 注意事项
+### 构建注意事项
 
 ### OpenCV 与 CUDA 版本冲突
 
@@ -160,3 +180,37 @@ colcon build \
     -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
     -DCMAKE_CUDA_ARCHITECTURES=120
 ```
+
+## 运行脚本说明
+
+  在完成构建后，在工作空间根目录执行：
+
+  ```bash
+  ./scripts/run.sh
+  ```
+
+  `run.sh` 会加载 ROS 2 和工作空间环境，然后启动：
+  `ros2 launch trt_infer_ros start.launch.py`
+
+  `start.launch.py` 会启动相机节点，并将推理节点加载到相机组件容器。脚本将 launch 进程置于独立进程组中；进程异常退出时会等待 10 秒后自动重启。重复执行脚本时，新的实例会先停止旧实例。
+
+  按 `Ctrl+C` 可停止守护脚本及其启动的全部节点。启动日志写入：
+
+  ```text
+  logs/start.launch.log
+  ```
+
+  运行状态 PID 文件位于 `.run.pids/`，正常退出时会自动清理。ROS 2 控制台颜色输出已关闭，因此新写入的日志不包含 ANSI 颜色控制字符。
+
+### 运行参数
+
+  默认使用 ROS 2 Humble。可通过环境变量调整运行环境和守护行为：
+
+  ```bash
+  ROS_DISTRO=jazzy ./scripts/run.sh
+  RESTART_DELAY=5 SHUTDOWN_TIMEOUT=10 ./scripts/run.sh
+  ```
+
+- `ROS_DISTRO`：ROS 2 发行版，默认 `humble`。
+- `RESTART_DELAY`：节点异常退出后的重启等待时间，单位为秒，默认 `10`。
+- `SHUTDOWN_TIMEOUT`：优雅停止超时时间，单位为秒，默认 `5`。
