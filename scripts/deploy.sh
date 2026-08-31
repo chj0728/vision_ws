@@ -28,6 +28,7 @@ usage() {
 	stop      停止视觉栈
 	restart   重启视觉栈
 	status    查看视觉栈状态
+	remove    停止视觉栈并删除 Supervisor 配置
 	logs      持续查看视觉栈日志
 	help      显示此帮助信息
 EOF
@@ -102,6 +103,19 @@ deploy() {
 	apply_config
 }
 
+# 停止并注销视觉栈服务，仅删除本脚本生成的 Supervisor 配置。
+remove() {
+	if sudo test -f "$SUPERVISOR_CONF"; then
+		sudo supervisorctl stop "$PROGRAM_NAME" 2>/dev/null || true
+		sudo rm -f "$SUPERVISOR_CONF"
+		sudo supervisorctl reread
+		sudo supervisorctl update
+		log "已移除视觉栈开机自启动配置。"
+	else
+		log "未找到视觉栈 Supervisor 配置，无需移除。"
+	fi
+}
+
 main() {
 	local command=${1:-deploy}
 	command -v sudo >/dev/null 2>&1 || fail "需要 sudo 管理 Supervisor。"
@@ -112,6 +126,9 @@ main() {
 			;;
 		start|stop|restart|status)
 			sudo supervisorctl "$command" "$PROGRAM_NAME"
+			;;
+		remove)
+			remove
 			;;
 		logs)
 			tail -n 100 -f "$WORK_DIR/logs/start.launch.log" "$SUPERVISOR_LOG_DIR/supervisor.log"

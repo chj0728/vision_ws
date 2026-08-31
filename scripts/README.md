@@ -233,7 +233,8 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh restart
 ./scripts/deploy.sh stop
 ./scripts/deploy.sh start
+./scripts/deploy.sh remove
 ./scripts/deploy.sh logs
 ```
 
-Supervisor 配置位于 `/etc/supervisor/conf.d/vision_stack.conf`。节点主日志仍写入 `logs/start.launch.log`；Supervisor 自身的状态和环境错误写入 `logs/supervisor.log`。
+Supervisor 配置位于 `/etc/supervisor/conf.d/vision_stack.conf`。节点主日志仍写入 `logs/start.launch.log`；Supervisor 自身的状态和环境错误写入 `logs/supervisor.log`。执行 `remove` 会停止服务并删除该配置，不会删除日志或工作区文件。
