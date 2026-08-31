@@ -51,7 +51,7 @@ ros2 launch trt_infer_ros camera.launch.py
 - 单独运行推理节点
 
 ```bash
-ros2 launch trt_infer_ros perception.launch.py use_composition:=False
+ros2 launch trt_infer_ros perception.launch.py
 ```
 
 ### 运行所有节点(推理节点将加入相机的组件容器)

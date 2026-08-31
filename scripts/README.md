@@ -1,6 +1,6 @@
 # vision_ws 脚本说明
 
-本目录提供 `install.sh`、`build.sh` 和 `run.sh`，分别用于安装依赖、构建工作空间和启动视觉栈。
+本目录提供 `install.sh`、`build.sh`、`run.sh` 和 `deploy.sh`，分别用于安装依赖、构建工作空间、启动视觉栈及配置开机自启动。
 
 ## 已验证平台
 
@@ -200,7 +200,7 @@ colcon build \
   logs/start.launch.log
   ```
 
-  运行状态 PID 文件位于 `.run.pids/`，正常退出时会自动清理。ROS 2 控制台颜色输出已关闭，因此新写入的日志不包含 ANSI 颜色控制字符。
+  运行状态 PID 文件位于 `.run.pids/`，正常退出时会自动清理。ROS 2 节点所需的临时文件日志也仅存放于该目录并自动清理；持久化日志只保留 `logs/start.launch.log`。ROS 2 控制台颜色输出已关闭，因此新写入的日志不包含 ANSI 颜色控制字符。
 
 ### 运行参数
 
@@ -214,3 +214,26 @@ colcon build \
 - `ROS_DISTRO`：ROS 2 发行版，默认 `humble`。
 - `RESTART_DELAY`：节点异常退出后的重启等待时间，单位为秒，默认 `10`。
 - `SHUTDOWN_TIMEOUT`：优雅停止超时时间，单位为秒，默认 `5`。
+
+## 开机自启动
+
+`deploy.sh` 使用 Supervisor 将 `run.sh` 注册为系统服务。部署后，视觉栈会在开机后自动启动；`run.sh` 或其 launch 进程异常退出时也会自动恢复。
+
+首次部署在工作空间根目录执行：
+
+```bash
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh deploy
+```
+
+常用管理命令：
+
+```bash
+./scripts/deploy.sh status
+./scripts/deploy.sh restart
+./scripts/deploy.sh stop
+./scripts/deploy.sh start
+./scripts/deploy.sh logs
+```
+
+Supervisor 配置位于 `/etc/supervisor/conf.d/vision_stack.conf`。节点主日志仍写入 `logs/start.launch.log`；Supervisor 自身的状态和环境错误写入 `logs/supervisor.log`。

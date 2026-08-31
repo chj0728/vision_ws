@@ -9,6 +9,7 @@ LOGS_DIR="$WORK_DIR/logs"
 PID_DIR="$WORK_DIR/.run.pids"
 SUPERVISOR_PID_FILE="$PID_DIR/run.pid"
 LAUNCH_PID_FILE="$PID_DIR/start_launch.pid"
+ROS_LOG_DIR="$PID_DIR/ros_logs"
 
 ROS_DISTRO_NAME=${ROS_DISTRO:-humble}
 ROS_SETUP="/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
@@ -70,7 +71,7 @@ stop_previous_supervisor() {
 
 cleanup_pid_files() {
     if [[ -f "$SUPERVISOR_PID_FILE" ]] && [[ "$(<"$SUPERVISOR_PID_FILE")" == "$$" ]]; then
-        rm -f "$SUPERVISOR_PID_FILE" "$LAUNCH_PID_FILE"
+        rm -rf "$PID_DIR"
     fi
     return 0
 }
@@ -104,7 +105,9 @@ supervise_launch() {
 
     while true; do
         echo "[INFO] Starting visual stack..."
-        setsid env --default-signal=INT,QUIT "${LAUNCH_COMMAND[@]}" >> "$LOGS_DIR/start.launch.log" 2>&1 &
+        rm -rf "$ROS_LOG_DIR"
+        mkdir -p "$ROS_LOG_DIR"
+        setsid env --default-signal=INT,QUIT ROS_LOG_DIR="$ROS_LOG_DIR" "${LAUNCH_COMMAND[@]}" >> "$LOGS_DIR/start.launch.log" 2>&1 &
         LAUNCH_PID=$!
         printf '%s\n' "$LAUNCH_PID" > "$LAUNCH_PID_FILE"
         echo "[INFO] Launch log: $LOGS_DIR/start.launch.log"

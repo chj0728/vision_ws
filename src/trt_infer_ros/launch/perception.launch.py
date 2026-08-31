@@ -1,9 +1,5 @@
-import datetime
-import os
-
 import launch
 import launch_ros.actions
-from ament_index_python.packages import get_package_share_directory
 from launch.actions import (
     DeclareLaunchArgument,
     GroupAction,
@@ -34,27 +30,6 @@ def generate_launch_description():
 
     use_composition = LaunchConfiguration("use_composition", default="False")
 
-    # 使用 COLCON_PREFIX_PATH 环境变量
-    colcon_prefix_path = os.environ.get("COLCON_PREFIX_PATH", "")
-    if colcon_prefix_path:
-        # 取第一个路径作为工作空间目录
-        work_space_dir = os.path.dirname(colcon_prefix_path.split(":")[0])
-    else:
-        # 回退到方案1
-        trt_infer_ros_dir = get_package_share_directory("trt_infer_ros")
-        work_space_dir = os.path.dirname(os.path.dirname(trt_infer_ros_dir))
-
-    # 创建带时间戳的日志目录
-    timestamp = datetime.datetime.now(
-        tz=datetime.timezone(datetime.timedelta(hours=8))
-    ).strftime("%Y-%m-%d_%H-%M-%S")
-
-    log_dir = os.path.join(work_space_dir, "logs", "perception_ros_node", timestamp)
-    print("perception_ros_node log directory:", log_dir)
-
-    # 设置 ROS_LOG_DIR 环境变量，确保日志输出到指定目录
-    os.environ["ROS_LOG_DIR"] = log_dir
-
     # models_dir = os.path.join(work_space_dir, "models")
     # print("models directory:", models_dir)
 
@@ -64,7 +39,6 @@ def generate_launch_description():
     return launch.LaunchDescription(
         [  # -------------- 全局环境变量设置（影响所有后续节点）------------------
             SetEnvironmentVariable(name="RCUTILS_COLORIZED_OUTPUT", value="0"),
-            SetEnvironmentVariable(name="ROS_LOG_DIR", value=log_dir),
             SetEnvironmentVariable(
                 name="RCUTILS_CONSOLE_OUTPUT_FORMAT",
                 value="[{severity}][{time}]-[{name}:{line_number}]: {message}",
