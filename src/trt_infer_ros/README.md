@@ -1,5 +1,11 @@
 # Pipelines 更新记录
 
+## ScenePerceptionResult 旧话题兼容 - 2026-08-31
+
+- `PerceptionRosComponent` 新增发布 `ScenePerceptionResult`，默认话题为 `/human_face_fusion/scene_perception`，可通过 `config/ros.yaml` 中的 `engagement_result_topic` 修改。
+- 兼容消息复用当前帧的 `PerceptionResult` 和 `InteractionResult`：旧版 `ENGAGED` 对应当前 `TALKING_STATUS`，旧版 `ATTENTION` 对应当前 `ATTENTION_STATUS`。
+- 每个人的人体、人脸、头姿和 ArcFace 识别结果均映射至 `PersonPerception`；当前流水线不提供性别结果，因此保持 `GENDER_UNKNOWN`。
+
 ## PerceptionRosComponent 图像处理流程优化 - 2026-08-28
 
 - 新增 `processDecodedColorDepth()`，统一处理已经解码完成的 BGR 彩色图和米制浮点深度图。

@@ -27,6 +27,7 @@
 #include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
 #include <trt_infer_msgs/msg/interaction_result.hpp>
 #include <trt_infer_msgs/msg/perception_result.hpp>
+#include <trt_infer_msgs/msg/scene_perception_result.hpp>
 
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgcodecs.hpp>
@@ -214,6 +215,16 @@ public:
       const trt_infer_msgs::msg::PersonMeta &person);
 
   /**
+   * @brief 发布兼容旧版 human_face_fusion 的场景感知结果
+   *
+   * @param perception_result 当前帧感知结果
+   * @param interaction_result 当前帧交互状态汇总
+   */
+  void publishEngagementResult(
+      const trt_infer_msgs::msg::PerceptionResult &perception_result,
+      const trt_infer_msgs::msg::InteractionResult &interaction_result);
+
+  /**
    * @brief 打印感知结果到控制台
    *
    * @param result
@@ -239,6 +250,9 @@ private:
   std::string perception_result_topic_;
   rclcpp::Publisher<trt_infer_msgs::msg::PerceptionResult>::SharedPtr
       perception_result_pub_;
+  std::string engagement_result_topic_;
+  rclcpp::Publisher<trt_infer_msgs::msg::ScenePerceptionResult>::SharedPtr
+      engagement_result_pub_;
   std::string color_bbox_topic_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr color_bbox_pub_;
 

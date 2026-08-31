@@ -43,6 +43,8 @@ void PerceptionRosComponent::declareParameters() {
       "depth_compressed_topic", "/camera/depth/image_raw/compressedDepth");
   this->declare_parameter<std::string>("perception_result_topic",
                                        "/perception/result");
+  this->declare_parameter<std::string>("engagement_result_topic",
+                                       "/human_face_fusion/scene_perception");
   this->declare_parameter<std::string>("color_bbox_topic",
                                        "/perception/color_bbox");
 
@@ -95,6 +97,8 @@ void PerceptionRosComponent::getParameters() {
   // 感知推理结果 和 交互逻辑结果话题名
   perception_result_topic_ =
       this->get_parameter("perception_result_topic").as_string();
+  engagement_result_topic_ =
+      this->get_parameter("engagement_result_topic").as_string();
   interaction_result_topic_ =
       this->get_parameter("interaction_result_topic").as_string();
   interaction_struct_.update(
@@ -130,6 +134,10 @@ void PerceptionRosComponent::initImplementation() {
   perception_result_pub_ =
       this->create_publisher<trt_infer_msgs::msg::PerceptionResult>(
           perception_result_topic_, rclcpp::QoS(10).reliable());
+
+  engagement_result_pub_ =
+      this->create_publisher<trt_infer_msgs::msg::ScenePerceptionResult>(
+          engagement_result_topic_, rclcpp::QoS(10).reliable());
 
   interaction_result_pub_ =
       this->create_publisher<trt_infer_msgs::msg::InteractionResult>(
@@ -367,6 +375,10 @@ void PerceptionRosComponent::processDecodedColorDepth(
   if (interaction_result_pub_->get_subscription_count() > 0) {
     interaction_result_pub_->publish(interaction_result_msg);
   }
+
+  if (engagement_result_pub_->get_subscription_count() > 0) {
+    publishEngagementResult(perception_result, interaction_result_msg);
+  }
 }
 
 void PerceptionRosComponent::drawPerceptionResultOnImage(
@@ -471,6 +483,56 @@ void PerceptionRosComponent::updateInteractionResult(
           person.body_detection.body_distance;
     }
   }
+}
+
+void PerceptionRosComponent::publishEngagementResult(
+    const trt_infer_msgs::msg::PerceptionResult &perception_result,
+    const trt_infer_msgs::msg::InteractionResult &interaction_result) {
+  trt_infer_msgs::msg::ScenePerceptionResult engagement_result;
+  engagement_result.header = perception_result.header;
+  engagement_result.image_width = perception_result.image_width;
+  engagement_result.image_height = perception_result.image_height;
+  engagement_result.body_pipeline_ms = perception_result.body_detection_ms;
+  engagement_result.best_engagement = interaction_result.best_status;
+  engagement_result.engaged_count = interaction_result.talking_status_num;
+  engagement_result.attention_count = interaction_result.attention_status_num;
+  engagement_result.closest_engaged_distance =
+      interaction_result.closest_talking_distance;
+  engagement_result.closest_attention_distance =
+      interaction_result.closest_attention_distance;
+  engagement_result.persons.reserve(perception_result.persons.size());
+
+  for (const auto &person : perception_result.persons) {
+    trt_infer_msgs::msg::PersonPerception legacy_person;
+    const auto &body_bbox = person.body_detection.body_bbox;
+    const auto &face_bbox = person.face_detection.face_bbox;
+
+    legacy_person.track_id = person.track_id;
+    legacy_person.body_x = body_bbox.x;
+    legacy_person.body_y = body_bbox.y;
+    legacy_person.body_w = body_bbox.w;
+    legacy_person.body_h = body_bbox.h;
+    legacy_person.body_conf = person.body_detection.body_confidence;
+    legacy_person.distance = person.body_detection.body_distance;
+    legacy_person.has_face = face_bbox.w > 0 && face_bbox.h > 0;
+    legacy_person.face_x = face_bbox.x;
+    legacy_person.face_y = face_bbox.y;
+    legacy_person.face_w = face_bbox.w;
+    legacy_person.face_h = face_bbox.h;
+    legacy_person.face_conf = person.face_detection.face_confidence;
+    legacy_person.yaw = person.head_pose.yaw;
+    legacy_person.pitch = person.head_pose.pitch;
+    legacy_person.roll = person.head_pose.roll;
+    legacy_person.engagement = interaction_struct_.getInteractionStatus(
+        legacy_person.yaw, legacy_person.pitch, legacy_person.distance);
+    legacy_person.person_uuid = person.face_recog.person_uuid;
+    legacy_person.person_name = person.face_recog.person_name;
+    legacy_person.face_recog_conf = person.face_recog.face_recog_conf;
+    legacy_person.face_embedding = person.face_recog.face_embedding;
+    engagement_result.persons.push_back(std::move(legacy_person));
+  }
+
+  engagement_result_pub_->publish(engagement_result);
 }
 
 void PerceptionRosComponent::printPerceptionResult(

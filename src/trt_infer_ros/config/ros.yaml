@@ -1,15 +1,20 @@
 /perception_ros_node:
   ros__parameters:
+    color_bbox_topic: /camera/color/image_bbox
     color_image_topic: /camera/color/image_raw # /camera/rgb/image_color
     depth_image_topic: /camera/depth/image_raw # /camera/depth/image
+
     use_compressed_images: true
     color_compressed_topic: /camera/color/image_raw/compressed
     depth_compressed_topic: /camera/depth/image_raw/compressedDepth
+
     perception_result_topic: /perception_result
     hard_sync: false
     sync_queue_size: 5
     processing_rate_hz: 5.0
-    color_bbox_topic: /camera/color/image_bbox
+
+    # 兼容旧版本的场景感知话题，类型为 ScenePerceptionResult
+    engagement_result_topic: /human_face_fusion/scene_perception
 
     # Interaction status parameters
     ## details in src/trt_infer_msgs/msg/InteractionResult.msg
