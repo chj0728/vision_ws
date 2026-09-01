@@ -112,9 +112,9 @@ private:
   /** @brief 将人脸识别消息恢复为未识别状态。 */
   static void clearMessage(trt_infer_msgs::msg::FaceRecog &face_recog);
 
-  /** @brief 将本次提取的 512 维特征写入 ROS 消息。 */
-  static void writeEmbedding(const FaceEmbedding &embedding,
-                             trt_infer_msgs::msg::FaceRecog &face_recog);
+  // /** @brief 将本次提取的 512 维特征写入 ROS 消息。 */
+  // static void writeEmbedding(const FaceEmbedding &embedding,
+  //                            trt_infer_msgs::msg::FaceRecog &face_recog);
 
   /** @brief 将已确认的 UUID、姓名和相似度写入 ROS 消息。 */
   static void writeIdentity(const RecognitionState &state,

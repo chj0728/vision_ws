@@ -190,11 +190,14 @@ void SCRFDPipeline::process(
     }
 
     auto &face_detection = person.face_detection;
+
+    face_detection.has_face = true;
+    face_detection.face_confidence = global_face.prob;
+
     face_detection.face_bbox.x = clipped_face.x;
     face_detection.face_bbox.y = clipped_face.y;
     face_detection.face_bbox.w = clipped_face.width;
     face_detection.face_bbox.h = clipped_face.height;
-    face_detection.face_confidence = global_face.prob;
 
     auto &person_context = frame_context.persons[index];
     person_context.has_face = true;

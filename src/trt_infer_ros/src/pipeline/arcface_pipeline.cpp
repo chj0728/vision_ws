@@ -204,15 +204,15 @@ void ArcFacePipeline::clearMessage(trt_infer_msgs::msg::FaceRecog &face_recog) {
   face_recog.person_uuid.clear();
   face_recog.person_name.clear();
   face_recog.face_recog_conf = 0.0f;
-  face_recog.face_embedding.fill(0.0f);
+  // face_recog.face_embedding.fill(0.0f);
 }
 
-void ArcFacePipeline::writeEmbedding(
-    const FaceEmbedding &embedding,
-    trt_infer_msgs::msg::FaceRecog &face_recog) {
-  std::copy(std::begin(embedding.v), std::end(embedding.v),
-            face_recog.face_embedding.begin());
-}
+// void ArcFacePipeline::writeEmbedding(
+//     const FaceEmbedding &embedding,
+//     trt_infer_msgs::msg::FaceRecog &face_recog) {
+//   std::copy(std::begin(embedding.v), std::end(embedding.v),
+//             face_recog.face_embedding.begin());
+// }
 
 void ArcFacePipeline::writeIdentity(
     const RecognitionState &state, trt_infer_msgs::msg::FaceRecog &face_recog) {
@@ -272,7 +272,8 @@ void ArcFacePipeline::process(
         }
         std::cout << ", ...]" << std::endl;
 
-        writeEmbedding(embedding, person.face_recog);
+        // writeEmbedding(embedding, person.face_recog);
+
         if (state.status == RecognitionStatus::Pending) {
           processPending(state, embedding, person, frame_context.frame_number);
         } else {

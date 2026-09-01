@@ -13,3 +13,8 @@ uint8 talking_status_num   # 本帧所有人中参与度状态为 TALKING 的人
 
 float32 closest_attention_distance  # 本帧所有人中参与度状态为 ATTENTION 的人中，距离最近的人的距离（单位：米）；-1 表示无 ATTENTION 人
 float32 closest_talking_distance    # 本帧所有人中参与度状态为 TALKING 的人中，距离最近的人的距离（单位：米）；-1 表示无 TALKING 人
+
+uint32  image_width             # 本帧彩图宽度（像素）
+uint32  image_height            # 本帧彩图高度（像素）
+
+PersonMeta[] persons  # 本帧所有人的元信息数组

@@ -1,5 +1,12 @@
 # Trt_infer_ros 更新记录
 
+## 感知结果消息完善与特征向量移除 - 2026-09-01
+
+- `InteractionResult` 新增 `image_width`、`image_height` 和 `PersonMeta[] persons`，发布时复用当前帧 `PerceptionResult` 的人员元信息，方便订阅端在单一话题中获得交互状态、图像尺寸和人员检测结果。
+- `FaceDetection` 新增 `has_face`，由 SCRFD 检测成功时设置为 `true`；旧版 `ScenePerceptionResult` 的 `has_face` 字段改为直接复用该状态。
+- `FaceRecog` 不再通过 ROS 消息发布 512 维 `face_embedding`，避免在感知与兼容结果消息中复制大量特征向量；身份 UUID、姓名和识别置信度保持不变。
+- 调整 `BodyDetection` 和 `FaceDetection` 消息字段顺序，并为边界框字段补充说明，不改变字段含义。
+
 ## PerceptionRosComponent 图像保存服务 - 2026-09-01
 
 - 新增三个 `std_srvs/srv/Trigger` 服务，用于保存最近一次完成感知处理的图像快照：

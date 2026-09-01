@@ -374,6 +374,12 @@ void PerceptionRosComponent::processDecodedColorDepth(
   interaction_result_msg.closest_attention_distance = -1.0F;
   interaction_result_msg.closest_talking_distance = -1.0F;
 
+  interaction_result_msg.image_width = static_cast<uint32_t>(color_image.cols);
+  interaction_result_msg.image_height = static_cast<uint32_t>(color_image.rows);
+  interaction_result_msg.persons.clear();
+  // copy perception_result.persons to interaction_result_msg.persons
+  interaction_result_msg.persons = perception_result.persons;
+
   for (const auto &person : perception_result.persons) {
 
     drawPerceptionResultOnImage(color_image_with_bbox, person);
@@ -619,7 +625,7 @@ void PerceptionRosComponent::publishEngagementResult(
     legacy_person.body_h = body_bbox.h;
     legacy_person.body_conf = person.body_detection.body_confidence;
     legacy_person.distance = person.body_detection.body_distance;
-    legacy_person.has_face = face_bbox.w > 0 && face_bbox.h > 0;
+    legacy_person.has_face = person.face_detection.has_face;
     legacy_person.face_x = face_bbox.x;
     legacy_person.face_y = face_bbox.y;
     legacy_person.face_w = face_bbox.w;
@@ -633,7 +639,9 @@ void PerceptionRosComponent::publishEngagementResult(
     legacy_person.person_uuid = person.face_recog.person_uuid;
     legacy_person.person_name = person.face_recog.person_name;
     legacy_person.face_recog_conf = person.face_recog.face_recog_conf;
-    legacy_person.face_embedding = person.face_recog.face_embedding;
+
+    // legacy_person.face_embedding = person.face_recog.face_embedding;
+
     engagement_result.persons.push_back(std::move(legacy_person));
   }
 
