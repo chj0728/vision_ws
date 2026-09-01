@@ -1,5 +1,18 @@
 # Trt_infer_ros 更新记录
 
+## UpdatePersonName 服务迁移 - 2026-09-01
+
+- `PerceptionRosComponent` 迁移旧 `human_face_fusion` 的改名服务，并保留原服务路径 `/human_face_fusion/update_person_name`，调用端无需修改服务名称。
+- 服务类型为 `trt_infer_msgs/srv/UpdatePersonName`，请求包含 `person_uuid` 和 `name`；成功时同步更新 SQLite 人脸库与 ArcFace 内存识别状态，后续帧中的 `person_name` 将立即更新。
+
+```bash
+ros2 service call /human_face_fusion/update_person_name \
+  trt_infer_msgs/srv/UpdatePersonName \
+  "{person_uuid: 'UUID', name: '姓名'}"
+```
+
+- 当感知 Pipeline 尚未初始化、UUID 为空、UUID 不存在或 ArcFace 未启用时，服务返回 `success: false` 并在 `message` 中说明原因。
+
 ## 感知结果消息完善与特征向量移除 - 2026-09-01
 
 - `InteractionResult` 新增 `image_width`、`image_height` 和 `PersonMeta[] persons`，发布时复用当前帧 `PerceptionResult` 的人员元信息，方便订阅端在单一话题中获得交互状态、图像尺寸和人员检测结果。

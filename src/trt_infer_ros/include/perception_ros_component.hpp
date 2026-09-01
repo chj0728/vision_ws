@@ -29,6 +29,7 @@
 #include <trt_infer_msgs/msg/interaction_result.hpp>
 #include <trt_infer_msgs/msg/perception_result.hpp>
 #include <trt_infer_msgs/msg/scene_perception_result.hpp>
+#include <trt_infer_msgs/srv/update_person_name.hpp>
 
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgcodecs.hpp>
@@ -206,8 +207,9 @@ public:
                               const trt_infer_msgs::msg::PersonMeta &person);
 
   /**
-   * @brief 更新 InteractionResult 消息，同时更新 PersonMeta.status 为当前交互状态
-   *         
+   * @brief 更新 InteractionResult 消息，同时更新 PersonMeta.status
+   * 为当前交互状态
+   *
    * @param interaction_result
    * @param person
    */
@@ -252,6 +254,13 @@ public:
   void
   saveAllImages(const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
                 std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  /** @brief 更新人脸数据库及当前轨迹中的人物姓名。 */
+  void updatePersonName(
+      const std::shared_ptr<trt_infer_msgs::srv::UpdatePersonName::Request>
+          request,
+      std::shared_ptr<trt_infer_msgs::srv::UpdatePersonName::Response>
+          response);
 
   /**
    * @brief 打印感知结果到控制台
@@ -317,6 +326,8 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_depth_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_bbox_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_all_images_service_;
+  rclcpp::Service<trt_infer_msgs::srv::UpdatePersonName>::SharedPtr
+      update_person_name_service_;
 
   // Interaction status parameters
   std::string interaction_result_topic_;

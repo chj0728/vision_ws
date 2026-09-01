@@ -57,6 +57,9 @@ public:
    */
   void process(const cv::Mat &rgb, const cv::Mat &depth,
                PerceptionResult &perception_result);
+
+  /** @brief 更新人脸数据库及当前轨迹中的人物姓名。 */
+  bool updatePersonName(const std::string &uuid, const std::string &name);
 };
 
 #endif // PERCEPTION_PIPELINE_HPP

@@ -157,6 +157,11 @@ void PerceptionRosComponent::initImplementation() {
       "save_all_images",
       std::bind(&PerceptionRosComponent::saveAllImages, this,
                 std::placeholders::_1, std::placeholders::_2));
+  update_person_name_service_ =
+      this->create_service<trt_infer_msgs::srv::UpdatePersonName>(
+          "/human_face_fusion/update_person_name",
+          std::bind(&PerceptionRosComponent::updatePersonName, this,
+                    std::placeholders::_1, std::placeholders::_2));
 
   // rclcpp::QoS image_qos(
   //     rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
@@ -490,6 +495,31 @@ void PerceptionRosComponent::saveAllImages(
         response->success ? directory.string() : "Failed to save image set.";
   } catch (const std::exception &exception) {
     response->message = exception.what();
+  }
+}
+
+void PerceptionRosComponent::updatePersonName(
+    const std::shared_ptr<trt_infer_msgs::srv::UpdatePersonName::Request>
+        request,
+    std::shared_ptr<trt_infer_msgs::srv::UpdatePersonName::Response> response) {
+  if (!perception_pipeline_ptr_) {
+    response->success = false;
+    response->message = "perception pipeline is not initialized";
+    return;
+  }
+  if (request->person_uuid.empty()) {
+    response->success = false;
+    response->message = "person_uuid is empty";
+    return;
+  }
+
+  response->success = perception_pipeline_ptr_->updatePersonName(
+      request->person_uuid, request->name);
+  response->message =
+      response->success ? "ok" : "uuid not found or ArcFace is disabled";
+  if (response->success) {
+    RCLCPP_INFO(this->get_logger(), "UpdatePersonName: uuid=%.8s name='%s'",
+                request->person_uuid.c_str(), request->name.c_str());
   }
 }
 

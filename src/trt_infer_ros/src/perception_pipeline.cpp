@@ -100,3 +100,9 @@ void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
     arcface_pipeline_ptr_->process(rgb, frame_context, perception_result);
   }
 } // namespace perception_pipeline
+
+bool PerceptionPipeline::updatePersonName(const std::string &uuid,
+                                          const std::string &name) {
+  return arcface_pipeline_ptr_ != nullptr &&
+         arcface_pipeline_ptr_->updatePersonName(uuid, name);
+}
