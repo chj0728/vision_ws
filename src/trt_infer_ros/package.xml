@@ -16,6 +16,7 @@
   <depend>rmw</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>trt_infer</depend>
   <depend>trt_infer_msgs</depend>
   <depend>yaml-cpp</depend>

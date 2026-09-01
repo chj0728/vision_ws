@@ -1,9 +1,11 @@
 #include "perception_ros_component.hpp"
 #include "perception_common.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <utility>
 
 namespace perception_ros_component {
@@ -142,6 +144,19 @@ void PerceptionRosComponent::initImplementation() {
   interaction_result_pub_ =
       this->create_publisher<trt_infer_msgs::msg::InteractionResult>(
           interaction_result_topic_, rclcpp::QoS(10).reliable());
+
+  save_color_depth_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "save_color_depth",
+      std::bind(&PerceptionRosComponent::saveColorDepth, this,
+                std::placeholders::_1, std::placeholders::_2));
+  save_color_bbox_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "save_color_bbox",
+      std::bind(&PerceptionRosComponent::saveColorBbox, this,
+                std::placeholders::_1, std::placeholders::_2));
+  save_all_images_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "save_all_images",
+      std::bind(&PerceptionRosComponent::saveAllImages, this,
+                std::placeholders::_1, std::placeholders::_2));
 
   // rclcpp::QoS image_qos(
   //     rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
@@ -378,6 +393,96 @@ void PerceptionRosComponent::processDecodedColorDepth(
 
   if (engagement_result_pub_->get_subscription_count() > 0) {
     publishEngagementResult(perception_result, interaction_result_msg);
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(latest_images_mutex_);
+    latest_color_image_ = color_image.clone();
+    latest_depth_meters_ = depth_meters.clone();
+    latest_color_bbox_image_ = color_image_with_bbox.clone();
+  }
+}
+
+void PerceptionRosComponent::saveColorDepth(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  cv::Mat color_image;
+  cv::Mat depth_meters;
+  {
+    std::lock_guard<std::mutex> lock(latest_images_mutex_);
+    color_image = latest_color_image_.clone();
+    depth_meters = latest_depth_meters_.clone();
+  }
+  if (color_image.empty() || depth_meters.empty()) {
+    response->message = "No color-depth frame is available.";
+    return;
+  }
+
+  try {
+    const auto directory = createImageSaveDirectory();
+    response->success =
+        cv::imwrite((directory / "color.png").string(), color_image) &&
+        writeDepthImage(directory / "depth.png", depth_meters);
+    response->message = response->success
+                            ? directory.string()
+                            : "Failed to save color or depth image.";
+  } catch (const std::exception &exception) {
+    response->message = exception.what();
+  }
+}
+
+void PerceptionRosComponent::saveColorBbox(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  cv::Mat color_bbox_image;
+  {
+    std::lock_guard<std::mutex> lock(latest_images_mutex_);
+    color_bbox_image = latest_color_bbox_image_.clone();
+  }
+  if (color_bbox_image.empty()) {
+    response->message = "No color bounding-box image is available.";
+    return;
+  }
+
+  try {
+    const auto directory = createImageSaveDirectory();
+    response->success =
+        cv::imwrite((directory / "color_bbox.png").string(), color_bbox_image);
+    response->message = response->success
+                            ? directory.string()
+                            : "Failed to save color bounding-box image.";
+  } catch (const std::exception &exception) {
+    response->message = exception.what();
+  }
+}
+
+void PerceptionRosComponent::saveAllImages(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  cv::Mat color_image;
+  cv::Mat depth_meters;
+  cv::Mat color_bbox_image;
+  {
+    std::lock_guard<std::mutex> lock(latest_images_mutex_);
+    color_image = latest_color_image_.clone();
+    depth_meters = latest_depth_meters_.clone();
+    color_bbox_image = latest_color_bbox_image_.clone();
+  }
+  if (color_image.empty() || depth_meters.empty() || color_bbox_image.empty()) {
+    response->message = "No complete image set is available.";
+    return;
+  }
+
+  try {
+    const auto directory = createImageSaveDirectory();
+    response->success =
+        cv::imwrite((directory / "color.png").string(), color_image) &&
+        writeDepthImage(directory / "depth.png", depth_meters) &&
+        cv::imwrite((directory / "color_bbox.png").string(), color_bbox_image);
+    response->message =
+        response->success ? directory.string() : "Failed to save image set.";
+  } catch (const std::exception &exception) {
+    response->message = exception.what();
   }
 }
 

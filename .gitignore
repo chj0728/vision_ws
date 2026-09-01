@@ -78,3 +78,4 @@ bags/
 *.trt
 *.engine
 *.sqlite3
+logs/images/

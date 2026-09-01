@@ -4,10 +4,14 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -302,4 +306,40 @@ decodeToFloatMeters(const sensor_msgs::msg::Image::ConstSharedPtr &depth_msg,
 
   return false;
 }
+
+/**
+ * @brief 创建用于保存图像的目录
+ *
+ * @return std::filesystem::path
+ */
+inline std::filesystem::path createImageSaveDirectory() {
+  const auto now = std::chrono::system_clock::now();
+  const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+  std::tm local_time{};
+  localtime_r(&now_time, &local_time);
+
+  std::ostringstream directory_name;
+  directory_name << std::put_time(&local_time, "%Y-%m-%d_%H-%M-%S");
+  const std::filesystem::path directory =
+      std::filesystem::path(TRT_WORKSPACE_ROOT "/logs/images") /
+      directory_name.str();
+  std::filesystem::create_directories(directory);
+  return directory;
+}
+
+/**
+ * @brief 将深度图像保存为毫米单位的图像文件
+ *
+ * @param path 保存路径
+ * @param depth_meters 浮点米单位的深度图像
+ * @return true 保存成功
+ * @return false 保存失败
+ */
+inline bool writeDepthImage(const std::filesystem::path &path,
+                            const cv::Mat &depth_meters) {
+  cv::Mat depth_millimeters;
+  depth_meters.convertTo(depth_millimeters, CV_16UC1, 1000.0);
+  return cv::imwrite(path.string(), depth_millimeters);
+}
+
 #endif // PERCEPTION_COMMON_HPP

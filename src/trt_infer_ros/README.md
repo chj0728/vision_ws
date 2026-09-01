@@ -1,4 +1,20 @@
-# Pipelines 更新记录
+# Trt_infer_ros 更新记录
+
+## PerceptionRosComponent 图像保存服务 - 2026-09-01
+
+- 新增三个 `std_srvs/srv/Trigger` 服务，用于保存最近一次完成感知处理的图像快照：
+
+```bash
+ros2 service call /save_color_depth std_srvs/srv/Trigger {}
+ros2 service call /save_color_bbox std_srvs/srv/Trigger {}
+ros2 service call /save_all_images std_srvs/srv/Trigger {}
+```
+
+- `/save_color_depth` 保存 `color.png` 和 `depth.png`。
+- `/save_color_bbox` 保存包含人体、人脸框和头姿可视化的 `color_bbox.png`。
+- `/save_all_images` 同时保存 `color.png`、`depth.png` 和 `color_bbox.png`。
+- 每次成功调用都会创建目录 `/home/caohaojie/ws/vision_ws/logs/images/YYYY-MM-DD_HH-MM-SS/`；服务响应的 `message` 字段返回实际保存目录。
+- 深度图以毫米为单位保存为 `uint16` 单通道 PNG；服务在尚未获得完整处理帧时返回失败信息。
 
 ## ScenePerceptionResult 旧话题兼容 - 2026-08-31
 

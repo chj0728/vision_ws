@@ -24,6 +24,7 @@
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <trt_infer_msgs/msg/detail/person_meta__struct.hpp>
 #include <trt_infer_msgs/msg/interaction_result.hpp>
 #include <trt_infer_msgs/msg/perception_result.hpp>
@@ -225,6 +226,34 @@ public:
       const trt_infer_msgs::msg::InteractionResult &interaction_result);
 
   /**
+   * @brief 保存彩色图像和深度图像的服务回调
+   *
+   * @param
+   * @param response
+   */
+  void
+  saveColorDepth(const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+                 std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  /**
+   * @brief 保存彩色图像和检测框的服务回调
+   *
+   * @param request
+   * @param response
+   */
+  void
+  saveColorBbox(const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+                std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  /**
+   * @brief 保存所有图像的服务回调
+   *
+   * @param request
+   * @param response
+   */
+  void
+  saveAllImages(const std::shared_ptr<std_srvs::srv::Trigger::Request> &,
+                std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  /**
    * @brief 打印感知结果到控制台
    *
    * @param result
@@ -280,6 +309,14 @@ private:
   CompressedImage::ConstSharedPtr latest_compressed_depth_msg_;
   std::mutex latest_frames_mutex_;
   rclcpp::TimerBase::SharedPtr processing_timer_;
+
+  std::mutex latest_images_mutex_;
+  cv::Mat latest_color_image_;
+  cv::Mat latest_depth_meters_;
+  cv::Mat latest_color_bbox_image_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_depth_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_bbox_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_all_images_service_;
 
   // Interaction status parameters
   std::string interaction_result_topic_;

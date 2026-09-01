@@ -41,6 +41,10 @@ def generate_launch_description():
                     "depth_registration": "true",
                     "enable_ir": "false",
                     "enable_point_cloud": "false",
+                    "color_width": "640",
+                    "color_height": "400",
+                    "depth_width": "640",
+                    "depth_height": "400",
                 }.items(),
             ),
         ]

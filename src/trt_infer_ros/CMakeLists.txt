@@ -32,6 +32,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(rmw REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(trt_infer REQUIRED)
 find_package(trt_infer_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
@@ -45,6 +46,7 @@ set(COMMON_COMPONENT_DEPENDENCIES
   rclcpp_components
   rmw
   sensor_msgs
+  std_srvs
   trt_infer
   trt_infer_msgs
 )
