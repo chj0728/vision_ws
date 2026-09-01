@@ -377,15 +377,16 @@ void PerceptionRosComponent::processDecodedColorDepth(
   interaction_result_msg.image_width = static_cast<uint32_t>(color_image.cols);
   interaction_result_msg.image_height = static_cast<uint32_t>(color_image.rows);
   interaction_result_msg.persons.clear();
-  // copy perception_result.persons to interaction_result_msg.persons
-  interaction_result_msg.persons = perception_result.persons;
 
-  for (const auto &person : perception_result.persons) {
+  for (auto &person : perception_result.persons) {
 
     drawPerceptionResultOnImage(color_image_with_bbox, person);
 
     updateInteractionResult(interaction_result_msg, person);
   }
+
+  // copy perception_result.persons to interaction_result_msg.persons
+  interaction_result_msg.persons = perception_result.persons;
 
   sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
       cv_bridge::CvImage(header, "bgr8", color_image_with_bbox).toImageMsg();
@@ -550,11 +551,12 @@ void PerceptionRosComponent::drawPerceptionResultOnImage(
 
 void PerceptionRosComponent::updateInteractionResult(
     trt_infer_msgs::msg::InteractionResult &interaction_result,
-    const trt_infer_msgs::msg::PersonMeta &person) {
+    trt_infer_msgs::msg::PersonMeta &person) {
 
   uint8_t current_status = interaction_struct_.getInteractionStatus(
       person.head_pose.yaw, person.head_pose.pitch,
       person.body_detection.body_distance);
+  person.status = current_status;
 
   // 如果当前的status大于interaction_result.best_status，则更新interaction_result.best_status为当前的status
   if (current_status > interaction_result.best_status) {
@@ -634,8 +636,7 @@ void PerceptionRosComponent::publishEngagementResult(
     legacy_person.yaw = person.head_pose.yaw;
     legacy_person.pitch = person.head_pose.pitch;
     legacy_person.roll = person.head_pose.roll;
-    legacy_person.engagement = interaction_struct_.getInteractionStatus(
-        legacy_person.yaw, legacy_person.pitch, legacy_person.distance);
+    legacy_person.engagement = person.status;
     legacy_person.person_uuid = person.face_recog.person_uuid;
     legacy_person.person_name = person.face_recog.person_name;
     legacy_person.face_recog_conf = person.face_recog.face_recog_conf;

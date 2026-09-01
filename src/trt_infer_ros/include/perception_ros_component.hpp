@@ -206,14 +206,14 @@ public:
                               const trt_infer_msgs::msg::PersonMeta &person);
 
   /**
-   * @brief 更新交互结果消息
-   *
+   * @brief 更新 InteractionResult 消息，同时更新 PersonMeta.status 为当前交互状态
+   *         
    * @param interaction_result
    * @param person
    */
   void updateInteractionResult(
       trt_infer_msgs::msg::InteractionResult &interaction_result,
-      const trt_infer_msgs::msg::PersonMeta &person);
+      trt_infer_msgs::msg::PersonMeta &person);
 
   /**
    * @brief 发布兼容旧版 human_face_fusion 的场景感知结果
