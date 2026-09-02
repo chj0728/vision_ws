@@ -94,10 +94,10 @@ struct InteractionStruct {
 
   uint8_t getInteractionStatus(const float &yaw, const float &pitch,
                                const float &distance) const {
-    if (isAttention(yaw, pitch, distance))
-      return 1; // Attention
     if (isTalking(yaw, pitch, distance))
       return 2; // Talking
+        if (isAttention(yaw, pitch, distance))
+            return 1; // Attention
     return 0;   // None
   }
 };

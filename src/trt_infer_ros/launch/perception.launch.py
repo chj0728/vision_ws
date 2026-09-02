@@ -71,7 +71,7 @@ def generate_launch_description():
             ),
             # use LoadComposableNodes to launch node into a component container if use composition
             TimerAction(
-                period=3.0,  # 延迟3秒
+                period=10.0,  # 延迟10秒
                 actions=[
                     GroupAction(
                         condition=IfCondition(use_composition),
