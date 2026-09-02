@@ -57,10 +57,16 @@ enable_supervisor() {
 
 # 生成配置时使用调用者而非 root 运行 ROS 节点，避免工作区文件权限错乱。
 write_config() {
-	local run_user user_home temp_conf
+	local run_user user_home ros_domain_id ros_discovery_range temp_conf
 	run_user=${SUDO_USER:-$(id -un)}
 	user_home=$(getent passwd "$run_user" | cut -d: -f6)
 	[[ -n "$user_home" ]] || fail "无法确定用户目录：$run_user"
+
+	# Supervisor 不会继承当前终端环境；DDS 配置必须与命令行保持一致。
+	ros_domain_id=${ROS_DOMAIN_ID:-0}
+	ros_discovery_range=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+	[[ "$ros_domain_id" =~ ^[0-9]+$ ]] || fail "ROS_DOMAIN_ID 必须是非负整数：$ros_domain_id"
+	log "使用 ROS_DOMAIN_ID=$ros_domain_id，ROS_AUTOMATIC_DISCOVERY_RANGE=$ros_discovery_range"
 
 	mkdir -p "$SUPERVISOR_LOG_DIR"
 	temp_conf=$(mktemp)
@@ -75,7 +81,7 @@ startsecs=5
 stopsignal=INT
 stopasgroup=true
 killasgroup=true
-environment=HOME="$user_home",USER="$run_user"
+environment=HOME="$user_home",USER="$run_user",ROS_DOMAIN_ID="$ros_domain_id",ROS_AUTOMATIC_DISCOVERY_RANGE="$ros_discovery_range"
 stdout_logfile=$SUPERVISOR_LOG_DIR/supervisor.log
 stderr_logfile=$SUPERVISOR_LOG_DIR/supervisor.log
 EOF
