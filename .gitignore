@@ -79,3 +79,11 @@ bags/
 *.engine
 *.sqlite3
 logs/images/
+
+.vscode/
+
+*.sqlite3-shm
+*.sqlite3-wal
+
+*.gz
+*.zip
