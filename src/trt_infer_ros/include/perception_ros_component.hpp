@@ -312,17 +312,24 @@ private:
   std::unique_ptr<
       message_filters::Synchronizer<CompressedApproximateSyncPolicy>>
       compressed_sync_approx_;
+
+  std::mutex latest_frames_mutex_;
   Image::ConstSharedPtr latest_color_msg_;
   Image::ConstSharedPtr latest_depth_msg_;
   CompressedImage::ConstSharedPtr latest_compressed_color_msg_;
   CompressedImage::ConstSharedPtr latest_compressed_depth_msg_;
-  std::mutex latest_frames_mutex_;
+
+  // timer to process the latest RGB and depth messages at the specified
+  // processing rate
+  rclcpp::CallbackGroup::SharedPtr timer_cb_group_;
   rclcpp::TimerBase::SharedPtr processing_timer_;
 
   std::mutex latest_images_mutex_;
   cv::Mat latest_color_image_;
   cv::Mat latest_depth_meters_;
   cv::Mat latest_color_bbox_image_;
+
+  rclcpp::CallbackGroup::SharedPtr service_cb_group_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_depth_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_color_bbox_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_all_images_service_;

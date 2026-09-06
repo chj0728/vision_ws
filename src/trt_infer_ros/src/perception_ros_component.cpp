@@ -145,23 +145,29 @@ void PerceptionRosComponent::initImplementation() {
       this->create_publisher<trt_infer_msgs::msg::InteractionResult>(
           interaction_result_topic_, rclcpp::QoS(10).reliable());
 
+  service_cb_group_ =
+      this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   save_color_depth_service_ = this->create_service<std_srvs::srv::Trigger>(
       "save_color_depth",
       std::bind(&PerceptionRosComponent::saveColorDepth, this,
-                std::placeholders::_1, std::placeholders::_2));
+                std::placeholders::_1, std::placeholders::_2),
+      rmw_qos_profile_services_default, service_cb_group_);
   save_color_bbox_service_ = this->create_service<std_srvs::srv::Trigger>(
       "save_color_bbox",
       std::bind(&PerceptionRosComponent::saveColorBbox, this,
-                std::placeholders::_1, std::placeholders::_2));
+                std::placeholders::_1, std::placeholders::_2),
+      rmw_qos_profile_services_default, service_cb_group_);
   save_all_images_service_ = this->create_service<std_srvs::srv::Trigger>(
       "save_all_images",
       std::bind(&PerceptionRosComponent::saveAllImages, this,
-                std::placeholders::_1, std::placeholders::_2));
+                std::placeholders::_1, std::placeholders::_2),
+      rmw_qos_profile_services_default, service_cb_group_);
   update_person_name_service_ =
       this->create_service<trt_infer_msgs::srv::UpdatePersonName>(
           "/human_face_fusion/update_person_name",
           std::bind(&PerceptionRosComponent::updatePersonName, this,
-                    std::placeholders::_1, std::placeholders::_2));
+                    std::placeholders::_1, std::placeholders::_2),
+          rmw_qos_profile_services_default, service_cb_group_);
 
   // rclcpp::QoS image_qos(
   //     rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default),
@@ -221,12 +227,15 @@ void PerceptionRosComponent::initImplementation() {
   }
 
   // 设置定时器以处理最新的RGB和深度图像
+  timer_cb_group_ =
+      this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   const auto processing_period =
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::duration<double>(1.0 / processing_rate_hz_));
   processing_timer_ = create_wall_timer(
       processing_period,
-      std::bind(&PerceptionRosComponent::processLatestColorDepth, this));
+      std::bind(&PerceptionRosComponent::processLatestColorDepth, this),
+      timer_cb_group_);
 
   RCLCPP_INFO(this->get_logger(),
               "[PerceptionRosComponent] initialized with %s RGB-D topics.",
