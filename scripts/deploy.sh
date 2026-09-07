@@ -137,7 +137,7 @@ main() {
 			remove
 			;;
 		logs)
-			tail -n 100 -f "$WORK_DIR/logs/start.launch.log" "$SUPERVISOR_LOG_DIR/supervisor.log"
+			tail -n 100 -f "$WORK_DIR/logs/start_all.log" "$SUPERVISOR_LOG_DIR/supervisor.log"
 			;;
 		help|-h|--help)
 			usage

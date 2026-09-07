@@ -197,10 +197,10 @@ colcon build \
   按 `Ctrl+C` 可停止守护脚本及其启动的全部节点。启动日志写入：
 
   ```text
-  logs/start.launch.log
+  logs/start_all.log
   ```
 
-  运行状态 PID 文件位于 `.run.pids/`，正常退出时会自动清理。ROS 2 节点所需的临时文件日志也仅存放于该目录并自动清理；持久化日志只保留 `logs/start.launch.log`。ROS 2 控制台颜色输出已关闭，因此新写入的日志不包含 ANSI 颜色控制字符。
+  运行状态 PID 文件位于 `.run.pids/`，正常退出时会自动清理。ROS 2 节点生成的临时日志统一放在 `logs/ros_logs/`；每次启动、自动重启或退出 `run.sh` 时都会清空并重建该目录。持久化的终端输出追加写入 `logs/start_all.log`。ROS 2 控制台颜色输出已关闭，因此新写入的日志不包含 ANSI 颜色控制字符。
 
 ### 运行参数
 
@@ -237,4 +237,4 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh logs
 ```
 
-Supervisor 配置位于 `/etc/supervisor/conf.d/vision_stack.conf`。节点主日志仍写入 `logs/start.launch.log`；Supervisor 自身的状态和环境错误写入 `logs/supervisor.log`。执行 `remove` 会停止服务并删除该配置，不会删除日志或工作区文件。
+Supervisor 配置位于 `/etc/supervisor/conf.d/vision_stack.conf`。节点主日志仍写入 `logs/start_all.log`；Supervisor 自身的状态和环境错误写入 `logs/supervisor.log`。执行 `remove` 会停止服务并删除该配置，不会删除持久化日志或工作区文件。
