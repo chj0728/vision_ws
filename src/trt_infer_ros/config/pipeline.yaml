@@ -3,67 +3,67 @@ yolo_pipeline:
   enable: true
   yolo_engine_name: yolo26m_fp16.engine
   yolo_engine_path: ""
-  conf_threshold: 0.45
-  max_distance_m: 5.0
-  depth_scale_to_meters: 0.001
-  min_depth_m: 0.08
-  max_depth_read_m: 25.0
-  only_human_class: true
-  distance_ema_enable: false
-  human_class_id: 0
-  depth_roi_y0: 0.52
-  depth_roi_y1: 0.98
-  depth_roi_x_margin: 0.2
-  depth_percentile: 0.5
-  depth_trim_close_ratio: 0.0
-  distance_ema_alpha: 0.35
-  bbox_coord_space: letterbox
-  engine_input_h: 0
-  engine_input_w: 0
+  conf_threshold: 0.45 # YOLO 检测置信度阈值
+  max_distance_m: 5.0 # 最大距离（米）
+  depth_scale_to_meters: 0.001 # 深度图像到米的缩放比例
+  min_depth_m: 0.08 # 最小深度（米）
+  max_depth_read_m: 25.0 # 最大可读取深度（米）
+  only_human_class: true # 是否仅检测人体类别
+  distance_ema_enable: false # 是否启用距离 EMA
+  human_class_id: 0 # 人体类别 ID
+  depth_roi_y0: 0.52 # 深度 ROI 起始 Y 坐标（归一化）
+  depth_roi_y1: 0.98 # 深度 ROI 结束 Y 坐标（归一化）
+  depth_roi_x_margin: 0.2 # 深度 ROI X 方向边距（归一化）
+  depth_percentile: 0.5 # 深度百分位数
+  depth_trim_close_ratio: 0.0 # 深度裁剪近端比例
+  distance_ema_alpha: 0.35 # 距离 EMA 平滑系数
+  bbox_coord_space: letterbox # 边界框坐标空间
+  engine_input_h: 0 # 引擎输入高度
+  engine_input_w: 0 # 引擎输入宽度
 
 # 人体框时序关联，不执行人脸识别。
 iou_tracker:
   enable: true
-  iou_threshold: 0.30
-  max_age_frames: 30
-  reid_window_seconds: 30
-  revive_iou_scale: 0.40
+  iou_threshold: 0.30 # IoU 匹配阈值
+  max_age_frames: 10 # 最大无匹配存活帧数， 原 30
+  reid_window_seconds: 30 # ReID 窗口时间（秒）
+  revive_iou_scale: 0.40 # 复活 IoU 缩放系数
 
 # 人脸检测 + 关键点
 scrfd_pipeline:
   enable: true
   scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.engine
   scrfd_engine_path: ""
-  preprocess: insightface
-  prob_threshold: 0.38
-  nms_threshold: 0.45
-  person_head_height_ratio: 0.58
-  person_head_width_pad_ratio: 0.24
-  person_head_top_expand_ratio: 0.14
-  face_roi_min_side: 48
-  max_person_rois: 8
+  preprocess: insightface # 人脸检测预处理方式
+  prob_threshold: 0.38 # 人脸检测置信度阈值
+  nms_threshold: 0.45 # 人脸检测 NMS 阈值
+  person_head_height_ratio: 0.58 # 人头高度占比
+  person_head_width_pad_ratio: 0.24 # 人头宽度填充比例
+  person_head_top_expand_ratio: 0.14 # 人头顶端扩展比例
+  face_roi_min_side: 48 # 人脸 ROI 最小边长（像素）
+  max_person_rois: 8 # 最大人体 ROI 数
 
 # 消费 SCRFD 人脸框，输出 yaw、pitch、roll 头部姿态角。
 sixdrepnet_pipeline:
   enable: true
   sixdrepnet_engine_name: SixDRepNet_fp16.engine
   sixdrepnet_engine_path: ""
-  min_face_px: 36
-  face_expand_ratio: 0.12
+  min_face_px: 36 # 最小人脸尺寸（像素）
+  face_expand_ratio: 0.12 # 人脸框扩展比例
 
 # 消费 SCRFD 五点关键点，并按 track_id 维护识别状态。
 arcface_pipeline:
   enable: true
   arcface_engine_name: arcface_w600k_r50_fp16.engine
   arcface_engine_path: ""
-  face_db_path: db/face_db.sqlite3
-  recog_threshold: 0.45
+  face_db_path: db/face_db.sqlite3 # 人脸库 SQLite 路径（不存在时自动创建）
+  recog_threshold: 0.45 # 识别余弦相似度阈值
   auto_register: true
-  min_face_px: 64
-  min_face_confidence: 0.75
-  min_track_frames: 20
-  embedding_buffer_size: 5
-  recheck_interval_frames: 150
+  min_face_px: 64 # 注册/识别最小人脸尺寸（像素）
+  min_face_confidence: 0.75 # 注册/识别 SCRFD 最小置信度
+  min_track_frames: 7 # 注册所需 track 最小稳定帧数，原 20
+  embedding_buffer_size: 5 # 注册/首次识别所需积累 embedding 数
+  recheck_interval_frames: 50 # 已识别 track 重验间隔（帧），原 150
   require_head_pose: false
   max_yaw_deg: 30.0
   max_pitch_deg: 25.0

@@ -11,7 +11,7 @@
     perception_result_topic: /perception_result
     hard_sync: false
     sync_queue_size: 5
-    processing_rate_hz: 5.0
+    processing_rate_hz: 10.0
 
     # 兼容旧版本的场景感知话题，类型为 ScenePerceptionResult
     engagement_result_topic: /human_face_fusion/scene_perception
