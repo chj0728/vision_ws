@@ -46,8 +46,16 @@
 # 默认：相机与感知组件加载至 perception_container（component_container_mt）
 ros2 launch trt_infer_ros start_all_launch.py
 
-# 非组合：相机运行于独立 component_container_mt，感知节点运行于独立进程
+# 非组合：相机与感知分别作为普通节点运行
 ros2 launch trt_infer_ros start_all_launch.py use_composition:=false
+
+# 单独启动时默认为普通节点
+ros2 launch trt_infer_ros custom_gemini2L.launch.py
+ros2 launch trt_infer_ros custom_perception.launch.py
+
+# 也可将单个组件加载至已经运行的容器
+ros2 launch trt_infer_ros custom_perception.launch.py \
+  use_composition:=true target_container:=perception_container
 ```
 
 ## 部署

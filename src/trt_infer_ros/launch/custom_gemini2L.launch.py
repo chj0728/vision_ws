@@ -1,13 +1,30 @@
-"""Load an Orbbec Gemini2L camera component into an existing container."""
+"""Launch the Orbbec Gemini2L camera as a node or a component."""
 
 import launch
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes
+from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode
+
+CAMERA_PARAMETER_DEFAULTS = {
+    "depth_registration": "true",
+    "enable_color": "true",
+    "color_width": "640",
+    "color_height": "400",
+    "color_fps": "30",
+    "color_format": "MJPG",
+    "enable_ir": "false",
+    "enable_point_cloud": "false",
+    "depth_width": "640",
+    "depth_height": "400",
+    "depth_fps": "30",
+    "depth_format": "Y16",
+    "enable_depth": "true",
+}
 
 
 def convert_value(value):
+    """Convert launch argument strings to ROS parameter values."""
     if value.lower() in {"true", "false"}:
         return value.lower() == "true"
     try:
@@ -16,79 +33,35 @@ def convert_value(value):
         return value
 
 
-def load_camera_component(context):
-    parameter_names = (
-        "depth_registration",
-        "enable_color",
-        "color_width",
-        "color_height",
-        "color_fps",
-        "color_format",
-        "enable_ir",
-        "enable_point_cloud",
-        "depth_width",
-        "depth_height",
-        "depth_fps",
-        "depth_format",
-        "enable_depth",
-    )
+def launch_camera(context):
     parameters = {
         name: convert_value(LaunchConfiguration(name).perform(context))
-        for name in parameter_names
+        for name in CAMERA_PARAMETER_DEFAULTS
     }
 
-    return [
-        LoadComposableNodes(
-            target_container=LaunchConfiguration("target_container"),
-            composable_node_descriptions=[
-                ComposableNode(
-                    package="orbbec_camera",
-                    plugin="orbbec_camera::OBCameraNodeDriver",
-                    name="camera",
-                    namespace=LaunchConfiguration("camera_name"),
-                    parameters=[parameters],
-                ),
-            ],
-        )
-    ]
-
-
-def create_camera_container(context):
-    parameter_names = (
-        "depth_registration",
-        "enable_color",
-        "color_width",
-        "color_height",
-        "color_fps",
-        "color_format",
-        "enable_ir",
-        "enable_point_cloud",
-        "depth_width",
-        "depth_height",
-        "depth_fps",
-        "depth_format",
-        "enable_depth",
-    )
-    parameters = {
-        name: convert_value(LaunchConfiguration(name).perform(context))
-        for name in parameter_names
-    }
+    if LaunchConfiguration("use_composition").perform(context).lower() == "true":
+        return [
+            LoadComposableNodes(
+                target_container=LaunchConfiguration("target_container"),
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package="orbbec_camera",
+                        plugin="orbbec_camera::OBCameraNodeDriver",
+                        name="camera",
+                        namespace=LaunchConfiguration("camera_name"),
+                        parameters=[parameters],
+                    )
+                ],
+            )
+        ]
 
     return [
-        ComposableNodeContainer(
-            name=LaunchConfiguration("target_container"),
-            namespace="",
-            package="rclcpp_components",
-            executable="component_container_mt",
-            composable_node_descriptions=[
-                ComposableNode(
-                    package="orbbec_camera",
-                    plugin="orbbec_camera::OBCameraNodeDriver",
-                    name="camera",
-                    namespace=LaunchConfiguration("camera_name"),
-                    parameters=[parameters],
-                ),
-            ],
+        Node(
+            package="orbbec_camera",
+            executable="orbbec_camera_node",
+            name="camera",
+            namespace=LaunchConfiguration("camera_name"),
+            parameters=[parameters],
             output="screen",
         )
     ]
@@ -96,33 +69,23 @@ def create_camera_container(context):
 
 def generate_launch_description():
     arguments = [
-        DeclareLaunchArgument("target_container", default_value="perception_container"),
-        DeclareLaunchArgument("create_container", default_value="false"),
+        DeclareLaunchArgument(
+            "use_composition",
+            default_value="false",
+            description="Load the camera into an existing component container.",
+        ),
+        DeclareLaunchArgument(
+            "target_container",
+            default_value="perception_container",
+            description="Container used when use_composition is true.",
+        ),
         DeclareLaunchArgument("camera_name", default_value="camera"),
-        DeclareLaunchArgument("depth_registration", default_value="true"),
-        DeclareLaunchArgument("enable_color", default_value="true"),
-        DeclareLaunchArgument("color_width", default_value="640"),
-        DeclareLaunchArgument("color_height", default_value="400"),
-        DeclareLaunchArgument("color_fps", default_value="30"),
-        DeclareLaunchArgument("color_format", default_value="MJPG"),
-        DeclareLaunchArgument("enable_ir", default_value="false"),
-        DeclareLaunchArgument("enable_point_cloud", default_value="false"),
-        DeclareLaunchArgument("depth_width", default_value="640"),
-        DeclareLaunchArgument("depth_height", default_value="400"),
-        DeclareLaunchArgument("depth_fps", default_value="30"),
-        DeclareLaunchArgument("depth_format", default_value="Y16"),
-        DeclareLaunchArgument("enable_depth", default_value="true"),
+        *[
+            DeclareLaunchArgument(name, default_value=default)
+            for name, default in CAMERA_PARAMETER_DEFAULTS.items()
+        ],
     ]
+
     return launch.LaunchDescription(
-        arguments
-        + [
-            OpaqueFunction(
-                function=lambda context: (
-                    create_camera_container(context)
-                    if LaunchConfiguration("create_container").perform(context).lower()
-                    == "true"
-                    else load_camera_component(context)
-                )
-            )
-        ]
+        arguments + [OpaqueFunction(function=launch_camera)]
     )
