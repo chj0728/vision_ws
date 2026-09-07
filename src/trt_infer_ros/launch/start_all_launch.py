@@ -60,27 +60,17 @@ def generate_launch_description():
                     TimerAction(
                         period=2.0,
                         actions=[
-                            LoadComposableNodes(
-                                target_container="perception_container",
-                                composable_node_descriptions=[
-                                    ComposableNode(
-                                        package="orbbec_camera",
-                                        plugin="orbbec_camera::OBCameraNodeDriver",
-                                        name="camera",
-                                        parameters=[
-                                            {
-                                                # "camera_name": "camera",
-                                                "depth_registration": "true",
-                                                "enable_ir": "false",
-                                                "enable_point_cloud": "false",
-                                                "color_width": "640",
-                                                "color_height": "400",
-                                                "depth_width": "640",
-                                                "depth_height": "400",
-                                            },
-                                        ],
-                                    ),
-                                ],
+                            IncludeLaunchDescription(
+                                PythonLaunchDescriptionSource(
+                                    os.path.join(
+                                        get_package_share_directory("trt_infer_ros"),
+                                        "launch",
+                                        "custom_gemini2L.launch.py",
+                                    )
+                                ),
+                                launch_arguments={
+                                    "target_container": "perception_container",
+                                }.items(),
                             ),
                         ],
                     ),
