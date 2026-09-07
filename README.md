@@ -114,6 +114,20 @@ logrotate [OPTION...] <configfile>
 -v, --verbose ：显示转储过程。
 ```
 
+### Cron 定时任务设置
+
+通过设置 Cron 定时任务，定时重启视觉栈服务。可以编辑当前用户的 crontab：
+
+```bash
+crontab -e
+```
+
+添加如下条目，每天凌晨 3 点重启视觉栈服务：
+
+```bash
+0 3 * * * /home/chj/ws/juroot/vision_ws/scripts/deploy.sh restart
+```
+
 ## 注意事项
 
 ### 相机部署
