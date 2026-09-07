@@ -19,12 +19,18 @@ def convert_value(value):
 def load_camera_component(context):
     parameter_names = (
         "depth_registration",
-        "enable_ir",
-        "enable_point_cloud",
+        "enable_color",
         "color_width",
         "color_height",
+        "color_fps",
+        "color_format",
+        "enable_ir",
+        "enable_point_cloud",
         "depth_width",
         "depth_height",
+        "depth_fps",
+        "depth_format",
+        "enable_depth",
     )
     parameters = {
         name: convert_value(LaunchConfiguration(name).perform(context))
@@ -52,12 +58,18 @@ def generate_launch_description():
         DeclareLaunchArgument("target_container", default_value="perception_container"),
         DeclareLaunchArgument("camera_name", default_value="camera"),
         DeclareLaunchArgument("depth_registration", default_value="true"),
-        DeclareLaunchArgument("enable_ir", default_value="false"),
-        DeclareLaunchArgument("enable_point_cloud", default_value="false"),
+        DeclareLaunchArgument("enable_color", default_value="true"),
         DeclareLaunchArgument("color_width", default_value="640"),
         DeclareLaunchArgument("color_height", default_value="400"),
+        DeclareLaunchArgument("color_fps", default_value="30"),
+        DeclareLaunchArgument("color_format", default_value="MJPG"),
+        DeclareLaunchArgument("enable_ir", default_value="false"),
+        DeclareLaunchArgument("enable_point_cloud", default_value="false"),
         DeclareLaunchArgument("depth_width", default_value="640"),
         DeclareLaunchArgument("depth_height", default_value="400"),
+        DeclareLaunchArgument("depth_fps", default_value="30"),
+        DeclareLaunchArgument("depth_format", default_value="Y16"),
+        DeclareLaunchArgument("enable_depth", default_value="true"),
     ]
     return launch.LaunchDescription(
         arguments + [OpaqueFunction(function=load_camera_component)]
