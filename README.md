@@ -42,22 +42,12 @@
 
 ## 本地运行节点测试
 
-- 单独运行相机节点
-
 ```bash
-ros2 launch trt_infer_ros camera.launch.py
-```
+# 默认：相机与感知组件加载至 perception_container（component_container_mt）
+ros2 launch trt_infer_ros start_all_launch.py
 
-- 单独运行推理节点
-
-```bash
-ros2 launch trt_infer_ros perception.launch.py
-```
-
-### 运行所有节点(推理节点将加入相机的组件容器)
-
-```bash
-ros2 launch trt_infer_ros start.launch.py 
+# 非组合：相机运行于独立 component_container_mt，感知节点运行于独立进程
+ros2 launch trt_infer_ros start_all_launch.py use_composition:=false
 ```
 
 ## 部署

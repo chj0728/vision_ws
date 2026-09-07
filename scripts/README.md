@@ -190,9 +190,9 @@ colcon build \
   ```
 
   `run.sh` 会加载 ROS 2 和工作空间环境，然后启动：
-  `ros2 launch trt_infer_ros start.launch.py`
+  `ros2 launch trt_infer_ros start_all_launch.py`
 
-  `start.launch.py` 会启动相机节点，并将推理节点加载到相机组件容器。脚本将 launch 进程置于独立进程组中；进程异常退出时会等待 10 秒后自动重启。重复执行脚本时，新的实例会先停止旧实例。
+  `start_all_launch.py` 默认将相机与推理组件加载到 `perception_container`。脚本将 launch 进程置于独立进程组中；进程异常退出时会等待 10 秒后自动重启。重复执行脚本时，新的实例会先停止旧实例。
 
   按 `Ctrl+C` 可停止守护脚本及其启动的全部节点。启动日志写入：
 

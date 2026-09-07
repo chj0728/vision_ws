@@ -16,7 +16,7 @@ from launch.substitutions import (
     PathJoinSubstitution,
     PythonExpression,
 )
-from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes
+from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 
@@ -109,19 +109,27 @@ def generate_launch_description():
                             os.path.join(
                                 get_package_share_directory("trt_infer_ros"),
                                 "launch",
-                                "camera.launch.py",
-                            )
-                        )
-                    ),
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            os.path.join(
-                                get_package_share_directory("trt_infer_ros"),
-                                "launch",
-                                "perception.launch.py",
+                                "custom_gemini2L.launch.py",
                             )
                         ),
-                        launch_arguments={"use_composition": "False"}.items(),
+                        launch_arguments={
+                            "target_container": "camera_container",
+                            "create_container": "true",
+                        }.items(),
+                    ),
+                    Node(
+                        package="trt_infer_ros",
+                        executable="perception_ros_node",
+                        name="perception_ros_node",
+                        output="screen",
+                        parameters=[
+                            ros_config_path,
+                            {
+                                "pipeline_config_path": pipeline_config_path.perform(
+                                    launch.LaunchContext()
+                                ),
+                            },
+                        ],
                     ),
                 ],
             ),

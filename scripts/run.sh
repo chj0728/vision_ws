@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 视觉栈守护脚本：start.launch.py 启动相机，并将推理节点加载到相机组件容器。
+# 视觉栈守护脚本：start_all_launch.py 启动相机和推理节点。
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORK_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
@@ -9,13 +9,13 @@ LOGS_DIR="$WORK_DIR/logs"
 PID_DIR="$WORK_DIR/.run.pids"
 SUPERVISOR_PID_FILE="$PID_DIR/run.pid"
 LAUNCH_PID_FILE="$PID_DIR/start_launch.pid"
-ROS_LOG_DIR="$PID_DIR/ros_logs"
+ROS_LOG_DIR="$LOGS_DIR"
 
 ROS_DISTRO_NAME=${ROS_DISTRO:-humble}
 ROS_SETUP="/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 RESTART_DELAY=${RESTART_DELAY:-10}
 SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT:-5}
-LAUNCH_COMMAND=(ros2 launch trt_infer_ros start.launch.py)
+LAUNCH_COMMAND=(ros2 launch trt_infer_ros start_all_launch.py)
 
 LAUNCH_PID=""
 
@@ -45,7 +45,7 @@ cleanup_previous_launch() {
     old_pid=$(<"$LAUNCH_PID_FILE")
     if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
         old_cmd=$(ps -p "$old_pid" -o args= 2>/dev/null || true)
-        if [[ "$old_cmd" == *"start.launch.py"* ]]; then
+        if [[ "$old_cmd" == *"start_all_launch.py"* ]]; then
             echo "[INFO] Stopping previous visual stack (PGID=$old_pid)"
             stop_process_group "$old_pid"
         else
@@ -105,9 +105,8 @@ supervise_launch() {
 
     while true; do
         echo "[INFO] Starting visual stack..."
-        rm -rf "$ROS_LOG_DIR"
         mkdir -p "$ROS_LOG_DIR"
-        setsid env --default-signal=INT,QUIT ROS_LOG_DIR="$ROS_LOG_DIR" "${LAUNCH_COMMAND[@]}" >> "$LOGS_DIR/start.launch.log" 2>&1 &
+        setsid env --default-signal=INT,QUIT ROS_LOG_DIR="$ROS_LOG_DIR" "${LAUNCH_COMMAND[@]}" > /dev/null 2>&1 &
         LAUNCH_PID=$!
         printf '%s\n' "$LAUNCH_PID" > "$LAUNCH_PID_FILE"
         echo "[INFO] Launch log: $LOGS_DIR/start.launch.log"
