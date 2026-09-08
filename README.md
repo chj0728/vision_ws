@@ -65,13 +65,19 @@ ros2 launch trt_infer_ros custom_perception.launch.py \
 日志轮转配置可参考以下示例，将其保存为 `/etc/logrotate.d/vision_ws`：
 
 ```bash
+sudo apt install -y logrotate
+```
+
+```bash
 sudo vim /etc/logrotate.d/vision_ws
 ```
 
 ```bash
 # /home/chj/ws/juroot/vision_ws/logs
-/home/chj/ws/juroot/vision_ws/logs/*.log {
+/home/orinagx/ws/vision_ws/logs/*.log {
+    su orinagx orinagx
     daily
+    maxsize 10M
     rotate 7
     compress
     missingok
@@ -80,11 +86,11 @@ sudo vim /etc/logrotate.d/vision_ws
     create
     dateext
     dateformat .%Y-%m-%d-%s
-    size 10M
 }
 ```
 
 ```bash
+- su orinagx orinagx   # 指定以哪个用户和用户组的权限来执行日志轮转
 - daily           # 指定转储周期为每天
 - rotate 7        # 指定日志文件删除之前转储的次数(保留最近7个日志文件)
 - compress        # 通过gzip 压缩转储以节省磁盘空间 or nocompress
@@ -94,7 +100,8 @@ sudo vim /etc/logrotate.d/vision_ws
 - create          # 创建新的日志文件
 - dateext        # 使用日期作为日志文件的扩展名
 - dateformat .%Y-%m-%d-%s
-- size 10M       # 当日志文件达到指定大小时进行转储
+- maxsize 10M       # 每天轮转，或达到 10MB 时提前轮转
+- size 10M       # 会覆盖 daily
 ```
 
 - 手动测试日志轮转
@@ -125,7 +132,7 @@ sudo crontab -u root -e
 添加如下条目，每天凌晨 3 点重启视觉栈服务：
 
 ```bash
-0 3 * * * bash -c "/home/chj/ws/juroot/vision_ws/scripts/deploy.sh restart"
+0 3 * * * bash -c "/home/orinagx/ws/vision_ws/scripts/deploy.sh restart"
 ```
 
 ## 注意事项
