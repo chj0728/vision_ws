@@ -370,17 +370,6 @@ void PerceptionRosComponent::processDecodedColorDepth(
   perception_pipeline_ptr_->process(color_image, depth_meters,
                                     perception_result);
 
-  // 打印感知结果到控制台
-  if (perception_result.persons.size() > 0) {
-    printPerceptionResult(perception_result);
-  }
-
-  // 发布感知结果
-  if (perception_result_pub_->get_subscription_count() > 0) {
-
-    perception_result_pub_->publish(perception_result);
-  }
-
   cv::Mat color_image_with_bbox = color_image.clone();
 
   trt_infer_msgs::msg::InteractionResult interaction_result_msg;
@@ -394,9 +383,9 @@ void PerceptionRosComponent::processDecodedColorDepth(
 
   for (auto &person : perception_result.persons) {
 
-    drawPerceptionResultOnImage(color_image_with_bbox, person);
-
     updateInteractionResult(interaction_result_msg, person);
+
+    drawPerceptionResultOnImage(color_image_with_bbox, person);
   }
 
   // copy perception_result.persons to interaction_result_msg.persons
@@ -404,16 +393,30 @@ void PerceptionRosComponent::processDecodedColorDepth(
 
   sensor_msgs::msg::Image::SharedPtr color_bbox_msg =
       cv_bridge::CvImage(header, "bgr8", color_image_with_bbox).toImageMsg();
+  // 发布带有感知结果的彩色图像
   if (color_bbox_pub_->get_subscription_count() > 0) {
     color_bbox_pub_->publish(*color_bbox_msg);
   }
 
+  // 发布感知结果 perception_result
+  if (perception_result_pub_->get_subscription_count() > 0) {
+
+    perception_result_pub_->publish(perception_result);
+  }
+
+  // 发布交互结果 interaction_result_msg
   if (interaction_result_pub_->get_subscription_count() > 0) {
     interaction_result_pub_->publish(interaction_result_msg);
   }
 
+  // 发布旧版的参与度结果 engagement_result
   if (engagement_result_pub_->get_subscription_count() > 0) {
     publishEngagementResult(perception_result, interaction_result_msg);
+  }
+
+  // 打印感知结果到控制台
+  if (perception_result.persons.size() > 0) {
+    printPerceptionResult(perception_result);
   }
 
   {
@@ -691,21 +694,48 @@ void PerceptionRosComponent::publishEngagementResult(
 void PerceptionRosComponent::printPerceptionResult(
     const trt_infer_msgs::msg::PerceptionResult &result) {
   RCLCPP_INFO(this->get_logger(),
-              "Perception Result: \n%zu persons detected, "
+              "\nPerception Result: >>>>>>>>>>>>>>>>>>>>>>>"
+              "\n%zu persons detected, "
               "\nbody_detection_ms: %.4f, \nface_detection_ms: %.4f, "
               "\nhead_pose_ms: %.4f, \nface_recog_ms: %.4f",
               result.persons.size(), result.body_detection_ms,
               result.face_detection_ms, result.head_pose_ms,
               result.face_recog_ms);
   for (const auto &person : result.persons) {
-    RCLCPP_INFO(this->get_logger(),
-                "Person track_id: %d, \nbody_distance: %.2f m, "
-                "\nhead_pose (yaw: %.2f, pitch: %.2f, "
-                "roll: %.2f)",
-                person.track_id, person.body_detection.body_distance,
-                person.head_pose.yaw, person.head_pose.pitch,
-                person.head_pose.roll);
+    RCLCPP_INFO(
+        this->get_logger(),
+        "\nPerson track_id: %d, "
+        "\nstatus: %d"
+        "\nbody_detection:"
+        "\n body_distance: %.2f m"
+        "\n body_confidence: %.2f"
+        "\n body_bbox (x: %d, y: %d, w: %d, h: %d), "
+        "\nface_detection:"
+        "\n has_face: %d"
+        "\n face_conf: %.2f"
+        "\n face_bbox (x: %d, y: %d, w: %d, h: %d), "
+        "\nhead_pose:"
+        "\n yaw: %.2f"
+        "\n pitch: %.2f"
+        "\n roll: %.2f"
+        "\nface_recog:"
+        "\n person_uuid: %s"
+        "\n person_name: %s"
+        "\n face_recog_conf: %.2f",
+        person.track_id, person.status, person.body_detection.body_distance,
+        person.body_detection.body_confidence,
+        person.body_detection.body_bbox.x, person.body_detection.body_bbox.y,
+        person.body_detection.body_bbox.w, person.body_detection.body_bbox.h,
+        person.face_detection.has_face, person.face_detection.face_confidence,
+        person.face_detection.face_bbox.x, person.face_detection.face_bbox.y,
+        person.face_detection.face_bbox.w, person.face_detection.face_bbox.h,
+        person.head_pose.yaw, person.head_pose.pitch, person.head_pose.roll,
+        person.face_recog.person_uuid.c_str(),
+        person.face_recog.person_name.c_str(),
+        person.face_recog.face_recog_conf);
   }
+  RCLCPP_INFO(this->get_logger(),
+              "\n<<<<<<<<<<<<<<<<<<<<<< Perception Result End");
 }
 
 } // namespace perception_ros_component

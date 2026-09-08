@@ -32,7 +32,7 @@ iou_tracker:
 # 人脸检测 + 关键点
 scrfd_pipeline:
   enable: true
-  scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.engine
+  scrfd_engine_name: scrfd_2.5g_bnkps_shape640x640.engine # scrfd_2.5g_bnkps_shape640x640.engine, scrfd_2.5g_bnkps_shape640x640.trt
   scrfd_engine_path: ""
   preprocess: insightface # 人脸检测预处理方式
   prob_threshold: 0.38 # 人脸检测置信度阈值
@@ -46,7 +46,7 @@ scrfd_pipeline:
 # 消费 SCRFD 人脸框，输出 yaw、pitch、roll 头部姿态角。
 sixdrepnet_pipeline:
   enable: true
-  sixdrepnet_engine_name: SixDRepNet_fp16.engine
+  sixdrepnet_engine_name: SixDRepNet_fp16.engine # SixDRepNet_fp16.engine, sixdrepnet_fp16.trt
   sixdrepnet_engine_path: ""
   min_face_px: 36 # 最小人脸尺寸（像素）
   face_expand_ratio: 0.12 # 人脸框扩展比例
@@ -54,12 +54,12 @@ sixdrepnet_pipeline:
 # 消费 SCRFD 五点关键点，并按 track_id 维护识别状态。
 arcface_pipeline:
   enable: true
-  arcface_engine_name: arcface_w600k_r50_fp16.engine
+  arcface_engine_name: arcface_w600k_r50_fp16.engine # arcface_w600k_r50_fp16.engine, w600k_r50_b16_gpu0_fp16.engine
   arcface_engine_path: ""
   face_db_path: db/face_db.sqlite3 # 人脸库 SQLite 路径（不存在时自动创建）
   recog_threshold: 0.45 # 识别余弦相似度阈值
   auto_register: true
-  min_face_px: 64 # 注册/识别最小人脸尺寸（像素）
+  min_face_px: 48 # 注册/识别最小人脸尺寸（像素）
   min_face_confidence: 0.75 # 注册/识别 SCRFD 最小置信度
   min_track_frames: 7 # 注册所需 track 最小稳定帧数，原 20
   embedding_buffer_size: 5 # 注册/首次识别所需积累 embedding 数

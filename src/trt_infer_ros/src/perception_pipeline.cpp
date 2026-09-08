@@ -87,6 +87,7 @@ void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
   PerceptionFrameContext frame_context;
   frame_context.frame_number = ++frame_number_;
+
   if (iou_tracker_ptr_) {
     iou_tracker_ptr_->process(perception_result, frame_context);
   }
