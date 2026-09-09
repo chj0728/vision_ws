@@ -4,19 +4,19 @@ yolo_pipeline:
   yolo_engine_name: yolo26m_fp16.engine
   yolo_engine_path: ""
   conf_threshold: 0.45 # YOLO 检测置信度阈值
-  max_distance_m: 5.0 # 最大距离（米），超出该距离的不输出人体检测框
+  max_distance_m: 3.5 # 最大距离（米），超出该距离的不输出人体检测框
   depth_scale_to_meters: 0.001 # 深度图像到米的缩放比例
   min_depth_m: 0.08 # 最小深度（米）
   max_depth_read_m: 25.0 # 最大可读取深度（米）
   only_human_class: true # 是否仅检测人体类别
   distance_ema_enable: false # 是否启用平滑距离EMA，平滑距离 = alpha × 当前距离 + (1 - alpha) × 历史平滑距离
+  distance_ema_alpha: 0.35 # 距离 EMA 平滑系数
   human_class_id: 0 # 人体类别 ID
   depth_roi_y0: 0.52 # 深度 ROI 起始 Y 坐标（归一化）
   depth_roi_y1: 0.98 # 深度 ROI 结束 Y 坐标（归一化）
   depth_roi_x_margin: 0.2 # 深度 ROI X 方向边距（归一化）
   depth_percentile: 0.5 # 深度百分位数
   depth_trim_close_ratio: 0.0 # 深度裁剪近端比例
-  distance_ema_alpha: 0.35 # 距离 EMA 平滑系数
   bbox_coord_space: letterbox # 边界框坐标空间
   engine_input_h: 0 # 引擎输入高度
   engine_input_w: 0 # 引擎输入宽度

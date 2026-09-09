@@ -98,13 +98,15 @@ void YOLOPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
       float distance = detection.distance;
 
-      if (distance > max_distance_m_) {
+      // skip invalid distances
+      if (distance > max_distance_m_ or distance <= 0.0f) {
         continue;
       }
 
-      const bool depth_valid = distance > 0.0f && distance <= max_distance_m_;
-      
-      if (depth_valid && distance_ema_enable_) {
+      // const bool depth_valid = distance > 0.0f && distance <=
+      // max_distance_m_;
+
+      if (distance_ema_enable_) {
         if (!distance_ema_valid_[index]) {
           distance_ema_state_[index] = distance;
           distance_ema_valid_[index] = 1;
@@ -124,8 +126,7 @@ void YOLOPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
       person.body_detection.body_confidence = detection.conf;
       person.body_detection.body_distance =
-          depth_valid ? std::round(distance * 1000.0f) / 1000.0f
-                      : -1.0f; // Round to 3 decimal places
+          std::round(distance * 1000.0f) / 1000.0f; // Round to 3 decimal places
       perception_result.persons.push_back(std::move(person));
     }
 
