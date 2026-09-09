@@ -4,7 +4,7 @@
     color_image_topic: /camera/color/image_raw # /camera/rgb/image_color
     depth_image_topic: /camera/depth/image_raw # /camera/depth/image
 
-    use_compressed_images: true
+    use_compressed_images: false
     color_compressed_topic: /camera/color/image_raw/compressed
     depth_compressed_topic: /camera/depth/image_raw/compressedDepth
 

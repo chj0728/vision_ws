@@ -6,20 +6,21 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode
 
-# 1280 800 10hz
+# 1280 800 15hz
 # 640 400 30hz
 CAMERA_PARAMETER_DEFAULTS = {
     "depth_registration": "true",
     "enable_color": "true",
     "color_width": "1280",
     "color_height": "800",
-    "color_fps": "10",
+    "color_fps": "15",
     "color_format": "MJPG",
     "enable_ir": "false",
     "enable_point_cloud": "false",
+    "enable_colored_point_cloud": "false",
     "depth_width": "1280",
     "depth_height": "800",
-    "depth_fps": "10",
+    "depth_fps": "15",
     "depth_format": "Y16",
     "enable_depth": "true",
 }
