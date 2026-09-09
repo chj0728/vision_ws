@@ -97,7 +97,13 @@ void YOLOPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
         continue;
 
       float distance = detection.distance;
+
+      if (distance > max_distance_m_) {
+        continue;
+      }
+
       const bool depth_valid = distance > 0.0f && distance <= max_distance_m_;
+      
       if (depth_valid && distance_ema_enable_) {
         if (!distance_ema_valid_[index]) {
           distance_ema_state_[index] = distance;
@@ -125,7 +131,8 @@ void YOLOPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
     std::chrono::duration<float, std::milli> pipeline_duration =
         std::chrono::high_resolution_clock::now() - start_time_;
-    // std::cout << "[YOLOPipeline] Processing time: " << pipeline_duration.count()
+    // std::cout << "[YOLOPipeline] Processing time: " <<
+    // pipeline_duration.count()
     //           << " ms" << std::endl;
     perception_result.body_detection_ms = pipeline_duration.count();
   }
