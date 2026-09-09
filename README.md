@@ -135,6 +135,27 @@ sudo crontab -u root -e
 0 3 * * * bash -c "/home/orinagx/ws/vision_ws/scripts/deploy.sh restart"
 ```
 
+## ROS服务
+
+| 服务名称 | 服务类型 | 用途 |
+| --- | --- | --- |
+| `/save_color_depth` | `std_srvs/srv/Trigger` | 保存当前彩色图和深度图 |
+| `/save_color_bbox` | `std_srvs/srv/Trigger` | 保存人体框、人脸框及头姿可视化图 |
+| `/save_all_images` | `std_srvs/srv/Trigger` | 保存彩色图、深度图和可视化图 |
+| `/human_face_fusion/update_person_name` | `trt_infer_msgs/srv/UpdatePersonName` | 根据 UUID 更新人脸库中的人物姓名 |
+
+```bash
+# 保存图像
+ros2 service call /save_color_depth std_srvs/srv/Trigger {}
+ros2 service call /save_color_bbox std_srvs/srv/Trigger {}
+ros2 service call /save_all_images std_srvs/srv/Trigger {}
+
+# 更新人物姓名
+ros2 service call /human_face_fusion/update_person_name \
+    trt_infer_msgs/srv/UpdatePersonName \
+    "{person_uuid: 'UUID', name: '姓名'}"
+```
+
 ## 注意事项
 
 ### 相机部署
