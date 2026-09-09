@@ -286,8 +286,8 @@ void ArcFacePipeline::process(
 
   std::chrono::duration<float, std::milli> pipeline_duration =
       std::chrono::high_resolution_clock::now() - start_time;
-  std::cout << "[ArcFacePipeline] Processing time: "
-            << pipeline_duration.count() << " ms" << std::endl;
+  // std::cout << "[ArcFacePipeline] Processing time: "
+  //           << pipeline_duration.count() << " ms" << std::endl;
   perception_result.face_recog_ms = pipeline_duration.count();
 }
 

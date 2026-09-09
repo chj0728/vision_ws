@@ -125,8 +125,8 @@ void YOLOPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
 
     std::chrono::duration<float, std::milli> pipeline_duration =
         std::chrono::high_resolution_clock::now() - start_time_;
-    std::cout << "[YOLOPipeline] Processing time: " << pipeline_duration.count()
-              << " ms" << std::endl;
+    // std::cout << "[YOLOPipeline] Processing time: " << pipeline_duration.count()
+    //           << " ms" << std::endl;
     perception_result.body_detection_ms = pipeline_duration.count();
   }
 }

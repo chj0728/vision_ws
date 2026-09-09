@@ -136,7 +136,7 @@ void SixDRepNetPipeline::process(
 
   const std::chrono::duration<float, std::milli> duration =
       std::chrono::high_resolution_clock::now() - start_time;
-  std::cout << "[SixDRepNetPipeline] Processing time: " << duration.count()
-            << " ms" << std::endl;
+  // std::cout << "[SixDRepNetPipeline] Processing time: " << duration.count()
+  //           << " ms" << std::endl;
   perception_result.head_pose_ms = duration.count();
 }

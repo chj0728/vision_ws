@@ -72,8 +72,8 @@ void PerceptionPipeline::process(const cv::Mat &rgb, const cv::Mat &depth,
                                  PerceptionResult &perception_result) {
   // Process the RGB and depth images using the YOLO engine
 
-  std::cout << "[PerceptionPipeline] Processing RGB and depth images..."
-            << std::endl;
+  // std::cout << "[PerceptionPipeline] Processing RGB and depth images..."
+  //           << std::endl;
 
   perception_result.persons.clear();
   perception_result.body_detection_ms = 0.0f;
