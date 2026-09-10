@@ -37,11 +37,11 @@ scrfd_pipeline:
   preprocess: insightface # 人脸检测预处理方式
   prob_threshold: 0.38 # 人脸检测置信度阈值
   nms_threshold: 0.45 # 人脸检测 NMS 阈值
-  person_head_height_ratio: 0.58 # 人头高度占比
-  person_head_width_pad_ratio: 0.24 # 人头宽度填充比例
-  person_head_top_expand_ratio: 0.14 # 人头顶端扩展比例
-  face_roi_min_side: 48 # 人脸 ROI 最小边长（像素）
-  max_person_rois: 8 # 最大人体 ROI 数
+  person_head_height_ratio: 0.58 # 头肩基础 ROI 高度占裁后人体高度的比例
+  person_head_width_pad_ratio: 0.24 # 左右各扩展的裁后人体宽度比例
+  person_head_top_expand_ratio: 0.14 # 向上扩展的裁后人体高度比例
+  face_roi_min_side: 48 # 头肩检测 ROI 最小边长（像素），不是输出人脸尺寸
+  max_person_rois: 8 # 按人员顺序尝试的 ROI 数上限，无效或过小 ROI 也计数
 
 # 消费 SCRFD 人脸框，输出 yaw、pitch、roll 头部姿态角。
 sixdrepnet_pipeline:

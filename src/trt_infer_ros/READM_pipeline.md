@@ -1,6 +1,6 @@
 # 感知 Pipeline 流程与维护说明
 
-> 核对日期：2026-09-09；第 6 节追踪模块于 2026-09-10 重新核对。本文描述当前源码行为，参数以 `config/pipeline.yaml` 为配置快照。历史变更见 [README_update.md](README_update.md)；历史记录或代码注释与实现不一致时，以实现为准，差异集中列在第 10 节。
+> 核对日期：2026-09-09；第 6、7 节追踪及人脸检测模块于 2026-09-10 重新核对。本文描述当前源码行为，参数以 `config/pipeline.yaml` 为配置快照。历史变更见 [README_update.md](README_update.md)；历史记录或代码注释与实现不一致时，以实现为准，差异集中列在第 10 节。
 
 ## 1. 文档范围与阅读导航
 
@@ -256,11 +256,11 @@ stateDiagram-v2
 
 ## 7. 步骤三：SCRFD 人脸检测与坐标回写
 
-接口与实现：[scrfd_pipeline.hpp](include/pipeline/scrfd_pipeline.hpp)、[scrfd_pipeline.cpp](src/pipeline/scrfd_pipeline.cpp)。入口为 `SCRFDPipeline::process(rgb, perception_result, frame_context)`。
+接口与实现：[scrfd_pipeline.hpp](include/pipeline/scrfd_pipeline.hpp)、[scrfd_pipeline.cpp](src/pipeline/scrfd_pipeline.cpp)。入口为 `SCRFDPipeline::process(bgr, perception_result, frame_context)`。
 
 ### 7.1 从人体框构建头肩 ROI
 
-`makeHeadRoi()` 先把人体框裁到图像内，裁后宽或高小于 4 则返回空区域。基于裁后人体框 `(x, y, w, h)`，当前配置大致产生：
+`buildHeadShoulderRoi()` 先把人体框裁到图像内，裁后宽或高小于 4 则返回空区域。基于裁后人体框 `(x, y, w, h)`，当前配置大致产生：
 
 ```text
 ROI 宽度 = ceil(w × (1 + 2 × 0.24))，至少 8 像素
@@ -275,14 +275,45 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 1. 重置上下文的 `has_face`，并清零消息人脸框和置信度。正常总流程的人员消息由 YOLO 新建，因此消息 `has_face` 初始为 false。
 2. 按 `persons` 现有顺序处理人体 ROI，最多 `max_person_rois` 个，当前为 8。计数在尺寸检查前增加，所以无效或过小 ROI 也占额度；没有额外按距离或轨迹稳定性排序。
-3. 调用 `SCRFD_TRT::detect(rgb(roi), faces, prob_threshold, nms_threshold)`。一个 ROI 没有脸时，保留该人体但不输出人脸。
-4. 一个 ROI 有多张脸时，只选置信度最高的一张；没有进一步按人体中心或跨帧人脸位置关联。
-5. 将人脸框和五点关键点加上 ROI 的左上角偏移，变为全图坐标。
-6. 消息人脸框取整并裁到图像内，写入 `has_face=true`、框和置信度；上下文保存包含浮点框、关键点、置信度的 `FaceObject`，并标记 `has_face=true`。
+3. `detectBestFaceInRoi()` 调用 `SCRFD_TRT::detect(bgr(head_roi), faces, face_confidence_threshold_, face_nms_iou_threshold_)`。没有候选时返回 false，保留该人体但不输出人脸。
+4. `detectBestFaceInRoi()` 使用 `std::max_element()` 只选置信度最高的一张，置信度相等时保留返回列表中先出现的人脸。输出的 `roi_face` 仍是 ROI 局部坐标，不在该函数内平移。没有进一步按人体中心或跨帧人脸位置关联。
+5. `writeFaceResult()` 将人脸框和全部五点关键点加上 ROI 的左上角偏移，变为全图坐标。
+6. `writeFaceResult()` 对人脸框的 x/y 向下取整、宽高向上取整，再裁到图像内；裁后宽高无效就返回，不尝试次高置信度人脸。有效时写入 `has_face=true`、框和置信度；上下文保存包含浮点框、关键点、置信度的 `FaceObject`，并标记 `has_face=true`。
 
 消息中的人脸框是裁后整数框，上下文中的 `face.rect` 是平移后的浮点框，两者不保证逐像素相同。SixDRepNet 使用后者再扩框；ArcFace 的尺寸门控使用消息框，对齐使用上下文关键点。
 
 由于每个人体 ROI 独立检测且没有跨 ROI 人脸去重，人体框重叠时可能选到同一张脸。YOLO 没有输出人体时，本模块不会补做全图找脸。
+
+### 7.3 `process()` 编排与命名约定
+
+`process()` 保留四个直接可见的阶段：重置本帧人脸数据 → 构建并检查头肩 ROI → 检测选脸 → 坐标转换与回写。成员函数只拆出独立职责，不改变执行顺序和检测策略。
+
+| 函数 | 职责 | 坐标约定 |
+| --- | --- | --- |
+| `buildHeadShoulderRoi()` | 读取成员中的 ROI 比例，按裁后人体框扩展并裁到图像边界 | 输入人体框和输出 ROI 都是全图坐标 |
+| `detectBestFaceInRoi()` | 在指定 ROI 上推理并选择最高置信度人脸 | 输出 `roi_face` 是 ROI 局部坐标 |
+| `writeFaceResult()` | 平移框及关键点，检查裁后框，写消息与上下文 | 输出是全图坐标，消息框为整数、上下文框为浮点 |
+
+形参 `bgr` 明确表示 BGR 彩色图，只有形参名称变化，公共接口类型及调用方式不变。`attempted_person_rois` 表示已经尝试的人员 ROI 数量，不是实际模型推理次数；它在 ROI 尺寸检查之前增加。只有有效 ROI 才调用检测器。
+
+| 内部成员 | 含义 | 保持兼容的 YAML 键 |
+| --- | --- | --- |
+| `face_detector_` | SCRFD TensorRT 检测器实例 | 无 |
+| `engine_filename_` / `engine_path_` | 默认引擎文件名 / 最终解析路径 | `scrfd_engine_name` / `scrfd_engine_path` |
+| `preprocess_mode_` | 转为小写的预处理模式 | `preprocess` |
+| `face_confidence_threshold_` | 人脸候选置信度阈值 | `prob_threshold` |
+| `face_nms_iou_threshold_` | 人脸候选 NMS IoU 阈值 | `nms_threshold` |
+| `head_roi_height_ratio_` | 基础 ROI 高度相对裁后人体高度的比例 | `person_head_height_ratio` |
+| `head_roi_side_padding_ratio_` | 左右各扩展的裁后人体宽度比例 | `person_head_width_pad_ratio` |
+| `head_roi_top_expansion_ratio_` | 向上扩展的裁后人体高度比例 | `person_head_top_expand_ratio` |
+| `min_head_roi_side_px_` | 头肩检测区域最小边长，不是输出人脸最小尺寸 | `face_roi_min_side` |
+| `max_person_roi_attempts_` | 每帧尝试处理的人数上限，包括无效和过小 ROI | `max_person_rois` |
+
+本节配置已对照工作空间的 [pipeline.yaml](../../config/pipeline.yaml) 核验，SCRFD 的当前值与第 11.4 节一致。此次保留所有 YAML 键名、数值、加载范围限制，以及 `loadParameters()`、`initialize()`、`isEnabled()`、`getEnginePath()` 公共接口。
+
+重置时仅调整上下文人员数量、清理上下文 `has_face` 和消息框及置信度，不重新创建整个人员上下文，因此不会丢失追踪器写入的 ID 和累计匹配帧数。沿用现有行为：消息 `has_face` 未显式清零，上下文旧 `face` 数据也不会清空，消费端应按上下文 `has_face` 判断是否有效；正常总流程依赖 YOLO 每帧新建消息。单独复用旧消息的限制仍见第 10.2 节，本次没有混入行为修复。
+
+计时仍从重置及启用检查之后开始，覆盖全部 ROI 循环。关闭模块、无检测器或输入图像为空时直接返回，不在 SCRFD 内重写耗时字段；总调度器负责每帧将其置零。检测异常仍向调用方传播，没有新增捕获或重试。
 
 ## 8. 步骤四：SixDRepNet 头部姿态估计
 
@@ -509,7 +540,7 @@ YOLO 层未对上述数值统一执行范围限制。调整 ROI 和统计参数�
 | 修改人体类别、有效距离或 EMA | [yolo_pipeline.cpp](src/pipeline/yolo_pipeline.cpp) 的 `process` |
 | 修改深度采样或模型后处理 | 底层 `YOLOEngine::inferWithDepth`、`yolo_depth_sampling_kernel` |
 | 修改匹配、老化和恢复 | `IouTracker::process/matchActiveTracks/recoverOrCreateTracks/retireAndRemoveExpiredTracks` |
-| 修改找脸范围、选脸策略或人数上限 | `makeHeadRoi`、`SCRFDPipeline::process` |
+| 修改找脸范围、选脸策略或人数上限 | `SCRFDPipeline::buildHeadShoulderRoi/detectBestFaceInRoi/writeFaceResult` |
 | 修改头姿裁剪和失败语义 | `expandFaceRect`、`clearHeadPose`、`SixDRepNetPipeline::process` |
 | 修改识别时机、注册或重验 | `passesQualityGate/processPending/processIdentified` |
 | 新增内部中间数据 | [perception_frame_context.hpp](include/pipeline/perception_frame_context.hpp) |
