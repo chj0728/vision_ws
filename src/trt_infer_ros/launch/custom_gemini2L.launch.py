@@ -23,6 +23,9 @@ CAMERA_PARAMETER_DEFAULTS = {
     "depth_fps": "15",
     "depth_format": "Y16",
     "enable_depth": "true",
+    "device_num": "1",
+    "vendor_id": "0x2bc5",
+    "connection_delay": "100",
 }
 
 

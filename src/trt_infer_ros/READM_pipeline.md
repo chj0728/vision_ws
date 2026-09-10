@@ -1,6 +1,6 @@
 # 感知 Pipeline 流程与维护说明
 
-> 核对日期：2026-09-09。本文描述当前源码行为，参数以 `config/pipeline.yaml` 为配置快照。历史变更见 [README_update.md](README_update.md)；历史记录或代码注释与实现不一致时，以实现为准，差异集中列在第 10 节。
+> 核对日期：2026-09-09；第 6 节追踪模块于 2026-09-10 重新核对。本文描述当前源码行为，参数以 `config/pipeline.yaml` 为配置快照。历史变更见 [README_update.md](README_update.md)；历史记录或代码注释与实现不一致时，以实现为准，差异集中列在第 10 节。
 
 ## 1. 文档范围与阅读导航
 
@@ -82,7 +82,7 @@ YOLO 深度采样支持按宽高比例把彩色坐标映射到不同分辨率的
 | `PerceptionResult.persons[i]` | 对外发布第 `i` 个人的检测、轨迹、头姿和身份 | 每帧重新生成 |
 | `PerceptionFrameContext.persons[i]` | 同一个人的轨迹累计帧数及底层 `FaceObject` | 仅当前 `process()` 内 |
 | `retained_track_ids` | 告诉 ArcFace 哪些轨迹仍应保留识别状态 | 每帧从追踪器重新生成 |
-| `IouTracker::tracks_` | 最近人体框、失配帧数、累计匹配帧数、死亡时间 | 随追踪器实例跨帧保存 |
+| `IouTracker::tracks_by_id_` | 最近人体框、失配帧数、累计匹配帧数、死亡时间 | 随追踪器实例跨帧保存 |
 | `ArcFacePipeline::recognition_states_` | 按 `track_id` 保存身份及待识别特征 | 随模块实例跨帧保存，按保留 ID 清理 |
 | SQLite 人脸库 | 人物 UUID、姓名及特征等信息 | 文件持久化，可跨进程重启 |
 
@@ -196,37 +196,63 @@ IoU 是两个矩形交集面积除以并集面积。两个框重叠越多，IoU 
 
 ### 6.1 匹配和分配 ID
 
-1. 按人员数量重新初始化上下文。追踪关闭时把消息 `track_id` 设为 `-1`、清空保留 ID，然后返回。
-2. `ageTracks()` 将所有活跃轨迹的 `age_frames` 加 1。
-3. 计算每个有效检测框与每条活跃轨迹的 IoU，把 `IoU >= iou_threshold` 的组合放入候选列表。
-4. 按 IoU 从高到低排序，贪心选择一对一匹配：某检测或轨迹已被使用，就不能再次匹配。这里不是匈牙利算法求全局最优分配。
-5. 匹配成功时，用当前框替换历史框，`age_frames=0`，`total_frames++`。
-6. 对尚未匹配的有效框，先调用 `tryRevive()` 尝试恢复死亡轨迹；否则创建新轨迹，分配 `next_id_++`，累计匹配帧数从 1 开始。
-7. 调用 `retireAndPurgeTracks()` 标记死亡并清理过期轨迹，再回写消息 ID、上下文 ID、累计匹配帧数和保留 ID 集合。
+`process()` 按以下五个阶段编排，消息和上下文始终保持同样的人员顺序：
 
-宽高无效的检测框不参与匹配，也不创建轨迹，对应 `track_id=-1`。
+1. **初始化本帧上下文。** 按人员数量重建 `frame_context.persons`。追踪关闭时把消息 `track_id` 设为 `-1`、清空保留 ID，然后返回；不清空追踪器内部历史状态。
+2. **累计失配并准备人体框。** `incrementMissedFrames()` 将所有活跃轨迹的 `missed_frames` 加 1，随后收集本帧人体框。这里先假设轨迹失配，匹配成功再清零，所以无人帧也能推进轨迹老化。
+3. **先正常匹配，再恢复或新建。** `matchActiveTracks()` 返回与人体框索引一致的轨迹指针列表；空指针表示尚未匹配。`recoverOrCreateTracks()` 只处理剩余的有效框，为它们恢复死亡轨迹或分配新 ID。
+4. **更新生命周期和保留集合。** `retireAndRemoveExpiredTracks()` 在匹配结束后标记死亡、清理超期轨迹；`collectRetainedTrackIds()` 收集仍保留的全部 ID，供 ArcFace 清理识别状态使用。
+5. **回写本帧结果。** 将轨迹 ID 写入消息和上下文，把内部 `matched_frames` 写入现有上下文字段 `track_total_frames`。仅输出本帧已有检测，不为历史轨迹补框。
+
+`matchActiveTracks()` 的内部步骤：
+
+- 收集活跃轨迹，对每个有效检测框计算与各条活跃轨迹的 IoU，将 `IoU >= match_iou_threshold_` 的组合记为 `MatchCandidate`。
+- 按 IoU 从高到低排序，贪心选择一对一匹配；某检测或轨迹已被使用，就不能再次匹配。候选遍历顺序和相同 IoU 时的排序规则保持原实现，不添加新的优先级，也不使用匈牙利算法。
+- 成功时调用 `Track::updateFromDetection()` 更新最近人体框、清零连续失配帧数、增加累计匹配帧数，并确保轨迹处于活跃状态。
+
+`recoverOrCreateTracks()` 按检测顺序处理未匹配框：先调用 `findRecoveryCandidate()`，只查找恢复窗口内满足宽松阈值的最佳死亡轨迹，不在查找函数里修改状态。找到后立即调用 `updateFromDetection()` 重新激活，因此同一死亡轨迹不能在本帧被两个检测重复恢复。未找到则创建轨迹，分配 `next_track_id_++`，同样调用该更新接口，使累计匹配帧数从 1 开始。
+
+宽高无效的检测框不参与匹配，也不创建轨迹，对应 `track_id=-1`。本帧新建的轨迹不会参与同帧剩余检测的正常匹配。轨迹存储使用 `std::map`，插入不会使已有轨迹指针失效；帧末清理也不会删除本帧已匹配的活跃轨迹。
 
 ### 6.2 活跃、死亡、恢复、清理
 
 ```mermaid
 stateDiagram-v2
     [*] --> Active: 新检测创建轨迹
-    Active --> Active: 正常匹配，age 清零
-    Active --> Dead: 帧末 age 大于 max_age_frames
+    Active --> Active: 正常匹配，missed_frames 清零
+    Active --> Dead: 帧末 missed_frames 大于 max_age_frames
     Dead --> Active: 恢复窗口内满足宽松 IoU 阈值
     Dead --> Removed: 死亡时长超过恢复窗口
     Removed --> [*]
 ```
 
-当前 YAML 的 `max_age_frames=10`。连续 10 次调用未匹配时轨迹仍活跃，第 11 次仍未匹配才在帧末标记死亡。由于匹配先于退休，本帧若成功匹配，年龄会清零，轨迹不会死亡。
+当前 YAML 的 `max_age_frames=10`。连续 10 次调用未匹配时轨迹仍活跃，第 11 次仍未匹配才在帧末标记死亡。由于匹配先于退休，本帧若成功匹配，连续失配帧数会清零，轨迹不会死亡。
 
 死亡后的恢复由 `std::chrono::steady_clock` 计时，当前窗口为 30 秒。实现将时长截成整数秒后用 `>` 判断超期，不是精确到毫秒的立即删除。
 
 恢复阈值为 `iou_threshold × revive_iou_scale`，当前为 `0.30 × 0.40 = 0.12`，且要求 IoU **严格大于**该值。恢复时沿用旧 ID，继续增加累计匹配帧数。死亡轨迹保存的是最后一次人体框，因此恢复只依据旧位置的重叠程度；参数名里的 `reid` 不代表外观重识别。
 
-`total_frames` 是累计成功匹配次数，包括新建时的一次，不要求连续，也不会在短期丢失后归零。ArcFace 的 `min_track_frames` 使用的就是这个值。
+`matched_frames` 是累计成功匹配次数，包括新建时的一次，不要求连续，也不会在短期丢失后归零。ArcFace 的 `min_track_frames` 使用的就是这个值。
 
-暂时未检测到的轨迹不会被补成 `persons` 输出；它们只在内部保留。`liveCount()` 统计未死亡轨迹，可能包含本帧未匹配轨迹，不能等同于本帧检测人数。`retained_track_ids` 则同时包含活跃和尚未清除的死亡轨迹，使 ArcFace 能在短期恢复后继续使用原识别状态。
+暂时未检测到的轨迹不会被补成 `persons` 输出；它们只在内部保留。`activeTrackCount()` 统计未死亡轨迹（`liveCount()` 保留为兼容入口），可能包含本帧未匹配轨迹，不能等同于本帧检测人数。`retained_track_ids` 则同时包含活跃和尚未清除的死亡轨迹，使 ArcFace 能在短期恢复后继续使用原识别状态。
+
+### 6.3 内部命名与配置兼容
+
+本次整理只调整内部命名、函数职责和注释，不改变 YAML 键名、配置值、消息字段及匹配行为。对外的 `process()`、`loadParameters()`、`isEnabled()` 保持不变，原计数接口 `liveCount()` 转发到更明确的 `activeTrackCount()`。
+
+| 成员 | 含义 | 对应 YAML 键或输出 |
+| --- | --- | --- |
+| `Track::last_body_bbox` | 最近一次成功匹配框，恢复也用这个位置 | 来自 `body_detection.body_bbox` |
+| `Track::missed_frames` | 连续失配帧数 | 与 `max_missed_frames_` 比较 |
+| `Track::matched_frames` | 累计匹配帧数，包含新建帧 | 写入 `track_total_frames` |
+| `Track::is_inactive` / `inactive_since` | 死亡状态及其起始时间 | 控制恢复与清理 |
+| `match_iou_threshold_` | 正常匹配的最小 IoU | `iou_threshold` |
+| `max_missed_frames_` | 允许连续失配帧数 | `max_age_frames` |
+| `recovery_window_seconds_` | 死亡轨迹恢复窗口 | `reid_window_seconds` |
+| `recovery_iou_scale_` | 恢复阈值相对于正常阈值的比例 | `revive_iou_scale` |
+| `next_track_id_` / `tracks_by_id_` | 下一个 ID / 按 ID 保存的保留轨迹 | 仅内部使用 |
+
+正常匹配使用 `>=`，恢复匹配使用 `>`，死亡和超期清理也使用 `>`；时间继续按整数秒比较。调整代码时应保留这些边界及“匹配先于退休”的顺序，避免仅做结构整理却改变原有 ID 行为。
 
 ## 7. 步骤三：SCRFD 人脸检测与坐标回写
 
@@ -482,7 +508,7 @@ YOLO 层未对上述数值统一执行范围限制。调整 ROI 和统计参数�
 | 调整阶段顺序或加入新模块 | [perception_pipeline.cpp](src/perception_pipeline.cpp) 的 `initialize/process`，以及对应头文件 |
 | 修改人体类别、有效距离或 EMA | [yolo_pipeline.cpp](src/pipeline/yolo_pipeline.cpp) 的 `process` |
 | 修改深度采样或模型后处理 | 底层 `YOLOEngine::inferWithDepth`、`yolo_depth_sampling_kernel` |
-| 修改匹配、老化和恢复 | `IouTracker::process/tryRevive/retireAndPurgeTracks` |
+| 修改匹配、老化和恢复 | `IouTracker::process/matchActiveTracks/recoverOrCreateTracks/retireAndRemoveExpiredTracks` |
 | 修改找脸范围、选脸策略或人数上限 | `makeHeadRoi`、`SCRFDPipeline::process` |
 | 修改头姿裁剪和失败语义 | `expandFaceRect`、`clearHeadPose`、`SixDRepNetPipeline::process` |
 | 修改识别时机、注册或重验 | `passesQualityGate/processPending/processIdentified` |

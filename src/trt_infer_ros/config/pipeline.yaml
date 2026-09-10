@@ -24,10 +24,10 @@ yolo_pipeline:
 # 人体框时序关联，不执行人脸识别。
 iou_tracker:
   enable: true
-  iou_threshold: 0.30 # IoU 匹配阈值
-  max_age_frames: 10 # 最大无匹配存活帧数， 原 30
-  reid_window_seconds: 30 # ReID 窗口时间（秒）
-  revive_iou_scale: 0.40 # 复活 IoU 缩放系数
+  iou_threshold: 0.30 # 活跃轨迹匹配要求 IoU >= 此阈值
+  max_age_frames: 20 # 连续失配超过 20 帧才标记失活；代码默认 30
+  reid_window_seconds: 15 # 不活跃轨迹的 IoU 恢复窗口（整数秒），不使用外观 ReID 默认 30
+  revive_iou_scale: 0.40 # 恢复要求 IoU > iou_threshold × 此系数
 
 # 人脸检测 + 关键点
 scrfd_pipeline:
