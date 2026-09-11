@@ -130,7 +130,7 @@ private:
 
   bool enabled_{false};           // 是否启用人脸识别
   bool auto_register_{true};      // 未匹配到人物时是否自动注册
-  bool require_head_pose_{false}; // 质量门控是否检查 yaw/pitch 角度范围
+  bool require_head_pose_{false}; // 是否要求有效头姿并检查 yaw/pitch 范围
   std::string engine_filename_;   // 默认引擎文件名
   std::string engine_path_;       // 解析后的引擎绝对路径
   std::string database_path_;     // SQLite 人脸数据库绝对路径

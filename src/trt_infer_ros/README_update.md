@@ -1,5 +1,14 @@
 # Trt_infer_ros 更新记录
 
+## 头姿有效性与人脸重置修复 - 2026-09-11
+
+- `HeadPose.msg` 新增 `valid`；每帧先置 false 并清零角度，SixDRepNet 推理成功且三个角度有限时才置 true。
+- ArcFace 在启用 `require_head_pose` 时检查 valid；无效头姿不参与交互角度判断、不绘制头姿框，缓存身份仍按原规则保留。
+- 旧 `PersonPerception` 兼容消息无效头姿映射为 yaw/pitch=999、roll=0，has_face 继续独立表示人脸检测结果。
+- SCRFD 每次调用先清空消息及上下文的人脸数据，保留轨迹 ID 和累计匹配帧数，避免复用消息时残留旧脸。
+- 需要重新构建消息包及相关发布、订阅端；详细语义见 `READM_pipeline.md` 第 7～10 节。
+
+
 ## UpdatePersonName 服务迁移 - 2026-09-01
 
 - `PerceptionRosComponent` 迁移旧 `human_face_fusion` 的改名服务，并保留原服务路径 `/human_face_fusion/update_person_name`，调用端无需修改服务名称。

@@ -104,7 +104,7 @@ YOLO 深度采样支持按宽高比例把彩色坐标映射到不同分辨率的
 | `person_uuid` 为空 | 当前没有已确认身份 |
 | UUID 非空、姓名为空 | 已关联数据库人物，但尚未命名 |
 | UUID 非空、相似度为 0 | 可能是刚自动注册，不能仅据此判断未识别 |
-| `yaw/pitch/roll == 0` | 可能是正面姿态，也可能是模块关闭、跳过或失败；当前不能单靠零值区分 |
+| `head_pose.valid` | true 表示本帧头姿推理成功且三个角度有限；false 时角度清零，不参与头姿判定 |
 
 ## 4. 初始化与单帧总调度
 
@@ -273,7 +273,7 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 ### 7.2 检测、选脸和还原坐标
 
-1. 重置上下文的 `has_face`，并清零消息人脸框和置信度。正常总流程的人员消息由 YOLO 新建，因此消息 `has_face` 初始为 false。
+1. 重置消息 `FaceDetection` 和上下文的人脸数据：两处 `has_face=false`，框、关键点与置信度清零；保留上下文轨迹 ID 和累计匹配帧数。
 2. 按 `persons` 现有顺序处理人体 ROI，最多 `max_person_rois` 个，当前为 8。计数在尺寸检查前增加，所以无效或过小 ROI 也占额度；没有额外按距离或轨迹稳定性排序。
 3. `detectBestFaceInRoi()` 调用 `SCRFD_TRT::detect(bgr(head_roi), faces, face_confidence_threshold_, face_nms_iou_threshold_)`。没有候选时返回 false，保留该人体但不输出人脸。
 4. `detectBestFaceInRoi()` 使用 `std::max_element()` 只选置信度最高的一张，置信度相等时保留返回列表中先出现的人脸。输出的 `roi_face` 仍是 ROI 局部坐标，不在该函数内平移。没有进一步按人体中心或跨帧人脸位置关联。
@@ -311,7 +311,7 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 本节配置已对照工作空间的 [pipeline.yaml](../../config/pipeline.yaml) 核验，SCRFD 的当前值与第 11.4 节一致。此次保留所有 YAML 键名、数值、加载范围限制，以及 `loadParameters()`、`initialize()`、`isEnabled()`、`getEnginePath()` 公共接口。
 
-重置时仅调整上下文人员数量、清理上下文 `has_face` 和消息框及置信度，不重新创建整个人员上下文，因此不会丢失追踪器写入的 ID 和累计匹配帧数。沿用现有行为：消息 `has_face` 未显式清零，上下文旧 `face` 数据也不会清空，消费端应按上下文 `has_face` 判断是否有效；正常总流程依赖 YOLO 每帧新建消息。单独复用旧消息的限制仍见第 10.2 节，本次没有混入行为修复。
+重置时调整上下文人员数量，并将消息 `FaceDetection` 和上下文 `face` 恢复为默认值，设置上下文 `has_face=false`。只清理人脸部分，不重新创建整个人员上下文，因此保留追踪器写入的 ID 和累计匹配帧数。重置在启用、引擎和空图检查之前执行；复用同一消息时，上一帧的脸也不会残留。
 
 计时仍从重置及启用检查之后开始，覆盖全部 ROI 循环。关闭模块、无检测器或输入图像为空时直接返回，不在 SCRFD 内重写耗时字段；总调度器负责每帧将其置零。检测异常仍向调用方传播，没有新增捕获或重试。
 
@@ -319,16 +319,16 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 接口与实现：[sixdrepnet_pipeline.hpp](include/pipeline/sixdrepnet_pipeline.hpp)、[sixdrepnet_pipeline.cpp](src/pipeline/sixdrepnet_pipeline.cpp)。入口为 `SixDRepNetPipeline::process(rgb, frame_context, perception_result)`。
 
-1. `clearHeadPose()` 先把所有人的 `yaw/pitch/roll` 设为 0。
+1. `clearHeadPose()` 先把所有人的 `valid` 设为 false，`yaw/pitch/roll` 设为 0。
 2. 模块关闭、引擎不存在或彩色图为空时直接返回；否则按消息和上下文数量的较小值遍历。
 3. 跳过上下文 `has_face=false` 的人。
 4. `expandFaceRect()` 以人脸中心为基准，宽高分别乘以 `1 + 2 × face_expand_ratio`，取整并裁到图像内。当前扩展率为 `0.12`，即宽高约变成原来的 `1.24` 倍。
 5. 检查**扩展且裁剪后的 ROI**，宽高均达到 `min_face_px`（当前 36）才调用 `SixDRepNet_TRT::predict(rgb(face_roi))`。
-6. 三个角度均为有限值时写回消息；非有限值或捕获到推理异常时保留零值。单个人推理抛出的 `std::exception` 被记录后，循环继续处理其他人。
+6. 三个角度均为有限值时写回消息，最后设置 `valid=true`；非有限值或捕获到推理异常时保持 `valid=false` 和零角度。单个人推理抛出的 `std::exception` 被记录后，循环继续处理其他人。
 
 `yaw` 表示左右转头，`pitch` 表示抬头低头，`roll` 表示侧倾，单位都是度。Pipeline 直接转写模型角度，不做符号变换或跨帧平滑。当前消息注释与历史更新记录对 yaw/pitch 正负方向的描述存在冲突，因此新增消费端时应结合实际模型输出和可视化核验，不能把某一处注释当作已统一的接口约定。
 
-当前没有有效性字段区分“成功预测为正面”和“未预测”。这会影响 ArcFace 的可选姿态门控及下游交互判断，详见第 10 节。
+`HeadPose.valid` 区分“成功预测为正面”和“未预测”。交互判断在 valid=false 时返回 None，绘图跳过头姿框；ArcFace 仅在 require_head_pose=true 时要求 valid。兼容旧 `PersonPerception` 消息没有该标志，无效时使用 yaw=999、pitch=999、roll=0，has_face 仍独立表示人脸检测结果。
 
 ## 9. 步骤五：ArcFace 身份识别、注册与重验
 
@@ -347,9 +347,9 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 | 累计匹配次数足够 | `track_total_frames >= 7` | 避免轨迹刚出现就立刻识别 |
 | 人脸置信度足够 | `face_confidence >= 0.75` | 降低不可靠人脸检测的影响 |
 | 人脸大小足够 | 消息框宽、高均 `>= 48` | 保证基本图像细节 |
-| 可选姿态限制 | `require_head_pose=true` 时检查 | yaw/pitch 有限，且绝对值分别不超过 30/25 度 |
+| 可选姿态限制 | `require_head_pose=true` 时检查 | valid=true，yaw/pitch 有限，且绝对值分别不超过 30/25 度 |
 
-当前 `require_head_pose=false`，不使用角度限制。即使启用，也只检查 yaw/pitch，不检查 roll，也不能确认 SixDRepNet 本帧是否真正成功。
+当前 `require_head_pose=false`，不要求有效头姿，也不使用角度限制。启用后先要求 `head_pose.valid=true`，再检查 yaw/pitch 有限且在阈值内；不限制 roll 的幅度。关闭姿态门控时仍可提取和注册特征，无效头姿对应的注册角度元数据仍为零，不代表实际正面姿态。
 
 ### 9.2 决定是否提取特征
 
@@ -453,8 +453,8 @@ ArcFace 先调用 `FaceDatabase::updateName()`，成功后遍历内存状态，�
 | --- | --- |
 | 关闭 YOLO | 没有模块创建 `persons`；其他模块不补充人体 |
 | 关闭 IoU Tracker | SCRFD 和头姿仍可运行，但 ID 为 -1，ArcFace 跳过人员识别 |
-| 关闭 SCRFD | 没有当前人脸，头姿保持零值，ArcFace 不提取新特征；已存在的有效轨迹身份仍可被复用 |
-| 关闭 SixDRepNet | 头姿保持零值；ArcFace 默认仍可识别 |
+| 关闭 SCRFD | 没有当前人脸，头姿 valid=false、角度为零，ArcFace 不提取新特征；已存在的有效轨迹身份仍可被复用 |
+| 关闭 SixDRepNet | 头姿 valid=false、角度为零；ArcFace 默认仍可识别，但交互状态为 None |
 | 关闭 ArcFace | 人体、追踪、人脸和头姿保留，身份消息为空 |
 
 这张表描述代码分支，不表示支持运行时热切换。初始化失败也不等同于配置关闭。
@@ -463,17 +463,19 @@ ArcFace 先调用 `FaceDatabase::updateName()`，成功后遍历内存状态，�
 
 | 项目 | 当前事实 | 后续调整时的注意点 |
 | --- | --- | --- |
-| 无效头姿 | `clearHeadPose()` 写 0；源码的 `kInvalidHeadPoseDeg=999` 未被使用，旧记录中的 999 行为已不适用 | 不能用零角度证明预测成功；`require_head_pose=true` 也会接受这些零值，其他门控满足时仍可提特征 |
+| 无效头姿（已修复） | `HeadPose.valid=false` 表示未获得有效头姿，角度清零；成功时才置 true | 识别姿态门控、交互判断和绘图均检查 valid；旧消息映射为 yaw/pitch=999、roll=0 |
 | 角度正负约定 | `HeadPose.msg` 注释与更新记录对 yaw/pitch 方向描述相反；Pipeline 不改符号 | 改动前通过实际动作统一模型、消息、绘图及消费端约定 |
 | Embedding 发布 | 消息特征字段仍停用，ArcFace 已移除废弃的写入代码注释；早期更新记录中的发布特征描述不再适用 | 当前 ROS 消费端只能读取 UUID、姓名、相似度 |
-| SCRFD 重置 | 清理内部 `has_face`、消息框和置信度，但未显式把消息 `has_face` 置 false | 正常总流程依赖 YOLO 每帧新建消息；若单独复用旧消息调用 SCRFD，可能残留 true |
+| SCRFD 重置（已修复） | 每次调用先清空消息 FaceDetection 和上下文的人脸标志、框及关键点 | 追踪字段保留；跳过、关闭或无脸时不再残留上一帧人脸 |
 | 距离 EMA | 按检测索引关联历史，未绑定轨迹 | 多人顺序变化时可能混用历史距离 |
 | 距离非有限值 | 当前过滤只有大小比较，没有显式 `std::isfinite` 检查；底层正常输出有限采样值或 -1 | 若其他输入路径传入 NaN，两次比较都为 false，目标会通过过滤；不能把当前条件描述为完整的非有限值校验 |
 | 识别时效 | 质量不足时可以持续复用缓存身份，没有独立身份过期时限 | UUID 不代表本帧已确认；IoU 误关联也可能暂时沿用错误身份 |
 | YOLO 坐标配置 | `bbox_coord_space` 被加载并传给引擎，但当前 `inferWithDepth()` 的 GPU 后处理未按 `bbox_in_original_space_` 分支 | 不应假定切换此参数就能修正当前 RGB-D 路径的框坐标；更换模型或输入形状需实测 |
 | 运行时异常 | SixDRepNet 对逐人预测有局部异常捕获；总调度器没有逐阶段统一捕获 | 不能假设任意模块抛异常后其余模块仍会执行 |
 
-这些内容是现状说明，不表示本次已修改算法。
+表中标注“已修复”的两项已落实到代码，其余条目仍是当前限制。
+
+头姿有效标志与 SCRFD 重置于 2026-09-11 修复。`HeadPose.msg` 增加字段后，必须重新构建 `trt_infer_msgs` 及相关发布、订阅端，不能混用旧的生成消息代码。新消息以 valid 判断有效性；仅旧兼容消息使用 999 哨兵值。
 
 ### 10.3 耗时字段如何理解
 
@@ -556,7 +558,7 @@ YOLO 层未对上述数值统一执行范围限制。调整 ROI 和统计参数�
 | `min_track_frames` | 7 / 20 | 至少 1；累计成功匹配次数门槛 |
 | `embedding_buffer_size` | 5 / 5 | `[1,5]`；首次查询前的特征积累量 |
 | `recheck_interval_frames` | 50 / 150 | 至少 1；已识别状态重验间隔 |
-| `require_head_pose` | false / false | 是否检查 yaw/pitch，当前不能验证头姿推理成功 |
+| `require_head_pose` | false / false | 是否要求 valid=true 并检查 yaw/pitch |
 | `max_yaw_deg` / `max_pitch_deg` | 30.0、25.0 / 相同 | 各限制在 `[1,90]`，只在姿态门控开启时参与判断 |
 
 ## 12. 后续迭代与验证建议

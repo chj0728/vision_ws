@@ -9,8 +9,6 @@
 
 namespace {
 
-constexpr float kInvalidHeadPoseDeg = 999.0f;
-
 /** @brief 以人脸框中心为基准向四周扩展，并裁剪到图像边界内。 */
 cv::Rect expandFaceRect(const cv::Rect_<float> &face_rect, float expand_ratio,
                         int image_width, int image_height) {
@@ -34,6 +32,7 @@ cv::Rect expandFaceRect(const cv::Rect_<float> &face_rect, float expand_ratio,
 
 /** @brief 将头姿消息恢复为未执行或推理失败状态。 */
 void clearHeadPose(trt_infer_msgs::msg::HeadPose &head_pose) {
+  head_pose.valid = false;
   head_pose.yaw = 0.0f;
   head_pose.pitch = 0.0f;
   head_pose.roll = 0.0f;
@@ -128,6 +127,7 @@ void SixDRepNetPipeline::process(
       head_pose.yaw = pose.yaw;
       head_pose.pitch = pose.pitch;
       head_pose.roll = pose.roll;
+      head_pose.valid = true; // 仅在三个角度均通过有限值检查后标记有效。
     } catch (const std::exception &exception) {
       std::cerr << "[SixDRepNetPipeline] Prediction failed: "
                 << exception.what() << std::endl;

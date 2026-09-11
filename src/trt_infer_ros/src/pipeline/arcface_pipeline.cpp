@@ -105,6 +105,9 @@ bool ArcFacePipeline::passesQualityGate(
   if (!require_head_pose_) {
     return true;
   }
+  if (!person.head_pose.valid) {
+    return false;
+  }
   const float yaw = person.head_pose.yaw;
   const float pitch = person.head_pose.pitch;
   return std::isfinite(yaw) && std::isfinite(pitch) &&

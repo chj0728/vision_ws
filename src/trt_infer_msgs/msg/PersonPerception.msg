@@ -28,7 +28,7 @@ int32   face_w      # 人脸 bbox 宽度（像素）
 int32   face_h      # 人脸 bbox 高度（像素）
 float32 face_conf   # SCRFD 置信度 [0, 1]
 
-# ── 头部姿态（6DRepNet；has_face=true 且 head_pose_enable=true 时有效）────────
+# ── 头部姿态：PerceptionRosComponent 映射无效头姿为 yaw/pitch=999、roll=0 ──
 float32 yaw         # 偏航角（度）；正值 = 向右转，负值 = 向左转
 float32 pitch       # 俯仰角（度）；正值 = 低头，负值 = 抬头
 float32 roll        # 翻滚角（度）；正值 = 向右侧倾

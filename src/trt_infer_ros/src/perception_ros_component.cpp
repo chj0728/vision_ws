@@ -583,8 +583,9 @@ void PerceptionRosComponent::drawPerceptionResultOnImage(
 
   // 4. 绘制基于 yaw, pitch, roll 的 box
   const auto &head_pose = person.head_pose;
-  if (face_bbox.w > 0 && face_bbox.h > 0 && std::isfinite(head_pose.yaw) &&
-      std::isfinite(head_pose.pitch) && std::isfinite(head_pose.roll)) {
+  if (head_pose.valid && face_bbox.w > 0 && face_bbox.h > 0 &&
+      std::isfinite(head_pose.yaw) && std::isfinite(head_pose.pitch) &&
+      std::isfinite(head_pose.roll)) {
     drawHeadPoseBox(
         image, cv::Rect2f(face_bbox.x, face_bbox.y, face_bbox.w, face_bbox.h),
         head_pose.yaw, head_pose.pitch, head_pose.roll);
@@ -595,9 +596,14 @@ void PerceptionRosComponent::updateInteractionResult(
     trt_infer_msgs::msg::InteractionResult &interaction_result,
     trt_infer_msgs::msg::PersonMeta &person) {
 
-  uint8_t current_status = interaction_struct_.getInteractionStatus(
-      person.head_pose.yaw, person.head_pose.pitch,
-      person.body_detection.body_distance);
+  // 未获得当前帧头姿时不能将清零角度解释为正面注视。
+  uint8_t current_status =
+      trt_infer_msgs::msg::InteractionResult::INVALID_STATUS;
+  if (person.head_pose.valid) {
+    current_status = interaction_struct_.getInteractionStatus(
+        person.head_pose.yaw, person.head_pose.pitch,
+        person.body_detection.body_distance);
+  }
   person.status = current_status;
 
   // 如果当前的status大于interaction_result.best_status，则更新interaction_result.best_status为当前的status
@@ -675,9 +681,11 @@ void PerceptionRosComponent::publishEngagementResult(
     legacy_person.face_w = face_bbox.w;
     legacy_person.face_h = face_bbox.h;
     legacy_person.face_conf = person.face_detection.face_confidence;
-    legacy_person.yaw = person.head_pose.yaw;
-    legacy_person.pitch = person.head_pose.pitch;
-    legacy_person.roll = person.head_pose.roll;
+    // 旧消息没有 valid 字段，使用越界角度表示无效，避免被解释为正面。
+    legacy_person.yaw = person.head_pose.valid ? person.head_pose.yaw : 999.0f;
+    legacy_person.pitch =
+        person.head_pose.valid ? person.head_pose.pitch : 999.0f;
+    legacy_person.roll = person.head_pose.valid ? person.head_pose.roll : 0.0f;
     legacy_person.engagement = person.status;
     legacy_person.person_uuid = person.face_recog.person_uuid;
     legacy_person.person_name = person.face_recog.person_name;

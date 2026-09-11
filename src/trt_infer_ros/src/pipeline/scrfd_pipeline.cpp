@@ -195,14 +195,11 @@ void SCRFDPipeline::process(
   for (std::size_t index = 0; index < perception_result.persons.size();
        ++index) {
     auto &person_context = frame_context.persons[index];
+    // 仅重置人脸部分，保留 track_id 和 track_total_frames。
     person_context.has_face = false;
-    auto &face_detection = perception_result.persons[index].face_detection;
-    // 沿用总流程每帧新建消息的约定，不改变旧接口的 has_face 重置行为。
-    face_detection.face_bbox.x = 0;
-    face_detection.face_bbox.y = 0;
-    face_detection.face_bbox.w = 0;
-    face_detection.face_bbox.h = 0;
-    face_detection.face_confidence = 0.0f;
+    person_context.face = FaceObject{};
+    perception_result.persons[index].face_detection =
+        trt_infer_msgs::msg::FaceDetection{};
   }
   if (!enabled_ || !face_detector_ || bgr.empty()) {
     return;
