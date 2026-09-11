@@ -25,6 +25,45 @@
 
 `YOLOEngine::infer` 完成普通目标检测。`YOLOEngine::inferWithDepth` 在同一 GPU 链路中完成图像预处理、推理、后处理和深度图采样，并将距离写入 `Detection::distance`。
 
+## 人脸数据库时间字段（2026-09-11）
+
+实现见 [face_database.h](include/arcface_trt/face_database.h) 和 [face_database.cpp](include/arcface_trt/face_database.cpp)。数据库中的时间列改为 `TEXT`，采用统一的 **UTC** 格式 `YYYY-MM-DD HH:MM:SS.SSS`，例如 `2026-09-11 03:04:05.123`。末尾三位表示毫秒，保留旧毫秒时间戳的精度。字符串本身不附带时区，不能直接按北京时间解释；该示例对应北京时间 `2026-09-11 11:04:05.123`。
+
+| 表 | 字段 | 数据库类型 | 含义及更新时机 |
+| --- | --- | --- | --- |
+| `persons` | `first_seen` | `TEXT NOT NULL` | 首次注册时间，后续访问不修改 |
+| `persons` | `last_seen` | `TEXT NOT NULL` | 注册时初始化，`touchPerson()` 时更新 |
+| `face_embeddings` | `captured_at` | `TEXT NOT NULL` | 特征入库时间，当前使用注册时刻，不是相机采集时间 |
+
+三个时间列的缺省值均为 `1970-01-01 00:00:00.000`，对应旧版缺省值 `0`。一次注册使用同一个时刻填写人物和全部特征的时间；识别算法、特征 BLOB、UUID、姓名及访问次数含义不变。
+
+### 上层接口兼容
+
+`open()`、`identify()`、`registerPerson()`、`updateName()`、`touchPerson()` 的签名和正常调用方式不变。`PersonRecord.first_seen/last_seen` 仍为 `int64_t` Unix 毫秒，读库时将文本转换回来；上层无需改用字符串。`nowMs()` 继续获取毫秒，写入 SQL 时通过 `strftime()` 格式化为 UTC，避免依赖设备的本地时区。
+
+直接读取 SQLite 的外部脚本需要按新类型处理时间，例如：
+
+```sql
+SELECT uuid, name, first_seen, last_seen, visit_count FROM persons;
+
+-- 在查询结果中显示北京时间，不改变数据库的 UTC 存储约定。
+SELECT uuid, strftime('%Y-%m-%d %H:%M:%f', last_seen, '+8 hours')
+FROM persons;
+```
+
+### 旧库迁移
+
+`open()` 创建缺失表后调用 `migrateTimeColumns()`，再加载内存人脸库：
+
+1. 检查实际列类型。三个时间列已经是 `TEXT` 时不重建，重复打开不会重复转换。
+2. 发现旧 `INTEGER` 时间列时，暂时关闭外键检查，开启写事务；创建新表并将 Unix 毫秒转换为 UTC 文本。部分列已经为 `TEXT` 时保留其文本并检查格式。
+3. 保留原有 UUID、姓名、访问次数、特征 ID、特征 BLOB、姿态及置信度；重建关联索引和触发器，并保留自增 ID 的历史最高值。
+4. 校验时间格式及外键关系，成功后提交并恢复外键检查。错误时回滚，关闭连接，`open()` 返回 `-1`，`isOpen()` 为 false。
+
+迁移针对本项目既有表布局；额外列、异常时间格式、临时表名冲突或无法重建的自定义依赖会使迁移失败，不应直接忽略失败继续识别。旧版程序不理解新的文本时间，因此升级后不应与旧版程序同时读写同一库。正式部署前保留旧库备份；迁移会在应用下次打开数据库时执行，本次代码测试不直接操作业务数据库。
+
+SQLite 没有专用日期时间存储类型，本文采用其支持的日期文本与 `strftime()` 转换；表类型变更使用事务重建方式。参考 [SQLite 日期时间函数](https://www.sqlite.org/lang_datefunc.html) 和 [SQLite 表结构变更说明](https://www.sqlite.org/lang_altertable.html)。
+
 ## 辅助文件
 
 - `scrfd_gpu_ops.cu/.h`：SCRFD 的 CUDA 图像预处理和候选框处理实现。
