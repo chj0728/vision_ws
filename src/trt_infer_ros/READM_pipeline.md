@@ -83,7 +83,7 @@ YOLO 深度采样支持按宽高比例把彩色坐标映射到不同分辨率的
 | `PerceptionFrameContext.persons[i]` | 同一个人的轨迹累计帧数及底层 `FaceObject` | 仅当前 `process()` 内 |
 | `retained_track_ids` | 告诉 ArcFace 哪些轨迹仍应保留识别状态 | 每帧从追踪器重新生成 |
 | `IouTracker::tracks_by_id_` | 最近人体框、失配帧数、累计匹配帧数、死亡时间 | 随追踪器实例跨帧保存 |
-| `ArcFacePipeline::recognition_states_` | 按 `track_id` 保存身份及待识别特征 | 随模块实例跨帧保存，按保留 ID 清理 |
+| `ArcFacePipeline::identity_states_by_track_id_` | 按 `track_id` 保存身份及待识别特征 | 随模块实例跨帧保存，按保留 ID 清理 |
 | SQLite 人脸库 | 人物 UUID、姓名及特征等信息 | 文件持久化，可跨进程重启 |
 
 上下文定义见 [perception_frame_context.hpp](include/pipeline/perception_frame_context.hpp)。`persons[i]` 的索引必须始终与消息一致。**索引只是本帧位置，不能作为跨帧身份**；后续若排序、删除人员，必须同步维护上下文。
@@ -332,13 +332,13 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 ## 9. 步骤五：ArcFace 身份识别、注册与重验
 
-接口与实现：[arcface_pipeline.hpp](include/pipeline/arcface_pipeline.hpp)、[arcface_pipeline.cpp](src/pipeline/arcface_pipeline.cpp)。入口为 `ArcFacePipeline::process(rgb, frame_context, perception_result)`。
+接口与实现：[arcface_pipeline.hpp](include/pipeline/arcface_pipeline.hpp)、[arcface_pipeline.cpp](src/pipeline/arcface_pipeline.cpp)。入口为 `ArcFacePipeline::process(bgr, frame_context, perception_result)`。
 
 ### 9.1 状态准备与质量门控
 
-每帧先通过 `clearMessage()` 清空消息中的 UUID、姓名和相似度。模块正常可用时，`pruneStates(retained_track_ids)` 删除已不被追踪器保留的内存识别状态，但不会删除 SQLite 人物记录。
+每帧先通过 `clearIdentityMessage()` 清空消息中的 UUID、姓名和相似度。模块正常可用时，`removeUnretainedTrackStates(retained_track_ids)` 删除已不被追踪器保留的内存识别状态，但不会删除 SQLite 人物记录。
 
-对有效 `track_id`，取出或新建 `RecognitionState`，初始状态为 `Pending`（待识别）。`passesQualityGate()` 要求同时满足：
+对有效 `track_id`，取出或新建 `TrackIdentityState`，初始状态为 `Pending`（待识别）。`passesQualityGate()` 要求同时满足：
 
 | 条件 | 当前 YAML 值或规则 | 通俗解释 |
 | --- | --- | --- |
@@ -353,15 +353,15 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 ### 9.2 决定是否提取特征
 
-质量门控通过后，还需要满足以下任一条件：当前状态为 `Pending`；或者已识别状态距离上次查询至少经过 `recheck_interval_frames`（当前 50）次 Pipeline 帧号推进。
+`updateIdentityIfReady()` 先调用 `passesQualityGate()`，不满足就直接返回。质量门控通过后，还需要满足以下任一条件：当前状态为 `Pending`；或者已识别状态距离上次查询至少经过 `recheck_interval_frames`（当前 50）次 Pipeline 帧号推进。
 
-`extractEmbedding()` 调用 `ArcFaceTRT::alignFace(rgb, landmarks)`，把双眼、鼻尖和嘴角五点对齐到标准 112×112 人脸，再提取 512 维特征。底层接口见 [arcface_trt.cpp](../trt_infer/include/arcface_trt/arcface_trt.cpp)。对齐或特征提取失败时，不推进识别状态。
+`extractAlignedEmbedding()` 调用 `ArcFaceTRT::alignFace(bgr, landmarks)`，把双眼、鼻尖和嘴角五点对齐到标准 112×112 人脸，再提取 512 维特征。底层接口见 [arcface_trt.cpp](../trt_infer/include/arcface_trt/arcface_trt.cpp)。对齐或特征提取失败时，不推进识别状态。
 
-没有达到重验间隔，或当前脸质量不够时，已识别轨迹仍通过 `writeIdentity()` 输出缓存身份。因此当前帧没有人脸也可能有 UUID；这表示沿用轨迹身份，不代表本帧进行了人脸确认。
+没有达到重验间隔，或当前脸质量不够时，已识别轨迹仍通过 `writeIdentityMessage()` 输出缓存身份。因此当前帧没有人脸也可能有 UUID；这表示沿用轨迹身份，不代表本帧进行了人脸确认。
 
 ### 9.3 待识别：积累、查询、自动注册
 
-`processPending()` 的处理顺序：
+`collectAndIdentify()` 的处理顺序：
 
 1. 保存本次 Embedding，同时保存对应 yaw、pitch 和人脸置信度。
 2. 特征数量不足 `embedding_buffer_size`（当前 5）就等待后续合格帧。中间不合格帧不会清空缓冲，因此不要求连续 5 帧。
@@ -375,7 +375,7 @@ ROI 水平居中于人体框，最后再次裁到图像内。这样既关注人�
 
 ### 9.4 已识别：周期重验
 
-`processIdentified()` 使用新特征再次查询整个数据库，随后更新 `last_recog_frame`：
+`recheckIdentity()` 使用新特征再次查询整个数据库，随后更新 `last_query_frame`：
 
 - 匹配成功：采用本次返回的 UUID、姓名和相似度，继续保持 `Identified`。这里允许匹配到与之前不同的 UUID，并非只验证原 UUID。
 - 匹配失败：退回 `Pending`，清空身份和缓冲；本次重验特征不会自动成为新缓冲的第一条，后续合格帧重新积累。
@@ -416,6 +416,35 @@ ArcFace 先调用 `FaceDatabase::updateName()`，成功后遍历内存状态，�
 
 现有 ROS 服务名为 `/human_face_fusion/update_person_name`，服务类型为 `trt_infer_msgs/srv/UpdatePersonName`，请求字段是 `person_uuid` 和 `name`。Pipeline 未初始化、ArcFace 关闭、UUID 为空或数据库更新失败时返回失败。服务响应细节由 ROS 层负责，算法接口仅返回 `bool`。
 
+### 9.7 总流程与命名约定
+
+`process()` 只负责编排，按以下四步执行：
+
+1. `clearIdentityMessage()` 清空所有人员的本帧身份字段。模块关闭、引擎或数据库不可用、输入图像为空时直接返回；此时不清理历史状态，也不回写缓存身份。
+2. `removeUnretainedTrackStates()` 删除追踪器已不保留的内存状态，不删除数据库记录。随后按消息与上下文人数的较小值遍历，跳过负数 `track_id`。
+3. 用 `try_emplace()` 取得或创建 `TrackIdentityState`，调用 `updateIdentityIfReady()`。该函数通过提前返回依次处理质量不合格、重验未到期、对齐或特征提取失败；符合条件才进入 `collectAndIdentify()` 或 `recheckIdentity()`。
+4. 无论第 3 步是否执行查询，都调用 `writeIdentityMessage()` 回写已确认身份。写消息放在状态更新之后，确保本帧重验失败时不会发布旧 UUID，也不会因质量不足而丢失仍有效的缓存身份。
+
+| 内部命名 | 含义 | 原配置键或外部字段 |
+| --- | --- | --- |
+| `RecognitionStage` / `TrackIdentityState::stage` | 待识别 Pending 或已识别 Identified | 不对外发布 |
+| `identity_states_by_track_id_` | 按轨迹 ID 保存的跨帧状态 | 键来自 `track_id` |
+| `similarity` | 最近一次识别相似度，新注册时为 0 | 写入 `face_recog_conf` 时限制到 `[0,1]` |
+| `last_query_frame` | 最近一次数据库查询帧号，不是最近一次提取特征的帧号 | 重验间隔以 Pipeline 帧号计算 |
+| `embedding_buffer` 及 `yaw_buffer/pitch_buffer/face_confidence_buffer` | 顺序对应的特征和质量元数据 | 注册时作为同组样本传给数据库 |
+| `embedding_extractor_` / `face_database_` | ArcFace 特征提取器 / 人脸数据库实例 | 不对外发布 |
+| `engine_filename_` / `engine_path_` / `database_path_` | 引擎文件名、解析后的引擎路径和数据库路径 | `arcface_engine_name` / `arcface_engine_path` / `face_db_path` |
+| `identity_similarity_threshold_` | 数据库识别相似度阈值 | `recog_threshold` |
+| `min_face_side_px_` | 消息人脸框宽高门槛 | `min_face_px` |
+| `min_track_matched_frames_` | 轨迹累计匹配帧数门槛，不要求连续 | `min_track_frames` |
+| `required_embedding_count_` | 首次查询前要求积累的样本数量 | `embedding_buffer_size` |
+
+`clearPendingSamples()` 同时清空特征、yaw、pitch 和人脸置信度四组缓冲，保持注册样本与元数据一一对应。本次保留原有容器及数据库接口，不新增平均特征、投票、自动追加特征或身份超时策略。
+
+公共接口和 YAML 键名、参数默认值及限制保持不变；`process()` 的彩色图形参更名为 `bgr`，明确实际颜色顺序。删除了已停用的 Embedding 消息写入代码注释，以及逐次打印特征值的调试日志；特征仍在内存中用于识别和注册，不通过 ROS 消息发布。
+
+耗时仍在清理历史状态后开始统计，覆盖逐人状态更新与消息回写；去掉调试输出后计时数值可能变化。异常仍向调用方传播，不新增捕获或重试。本节于 2026-09-11 按当前实现重新核对。
+
 ## 10. 模块关闭、异常与当前实现边界
 
 ### 10.1 关闭模块后的实际结果
@@ -436,7 +465,7 @@ ArcFace 先调用 `FaceDatabase::updateName()`，成功后遍历内存状态，�
 | --- | --- | --- |
 | 无效头姿 | `clearHeadPose()` 写 0；源码的 `kInvalidHeadPoseDeg=999` 未被使用，旧记录中的 999 行为已不适用 | 不能用零角度证明预测成功；`require_head_pose=true` 也会接受这些零值，其他门控满足时仍可提特征 |
 | 角度正负约定 | `HeadPose.msg` 注释与更新记录对 yaw/pitch 方向描述相反；Pipeline 不改符号 | 改动前通过实际动作统一模型、消息、绘图及消费端约定 |
-| Embedding 发布 | 消息字段和写入代码已注释；早期记录和部分接口注释仍描述发布特征 | 当前 ROS 消费端只能读取 UUID、姓名、相似度 |
+| Embedding 发布 | 消息特征字段仍停用，ArcFace 已移除废弃的写入代码注释；早期更新记录中的发布特征描述不再适用 | 当前 ROS 消费端只能读取 UUID、姓名、相似度 |
 | SCRFD 重置 | 清理内部 `has_face`、消息框和置信度，但未显式把消息 `has_face` 置 false | 正常总流程依赖 YOLO 每帧新建消息；若单独复用旧消息调用 SCRFD，可能残留 true |
 | 距离 EMA | 按检测索引关联历史，未绑定轨迹 | 多人顺序变化时可能混用历史距离 |
 | 距离非有限值 | 当前过滤只有大小比较，没有显式 `std::isfinite` 检查；底层正常输出有限采样值或 -1 | 若其他输入路径传入 NaN，两次比较都为 false，目标会通过过滤；不能把当前条件描述为完整的非有限值校验 |
@@ -542,7 +571,7 @@ YOLO 层未对上述数值统一执行范围限制。调整 ROI 和统计参数�
 | 修改匹配、老化和恢复 | `IouTracker::process/matchActiveTracks/recoverOrCreateTracks/retireAndRemoveExpiredTracks` |
 | 修改找脸范围、选脸策略或人数上限 | `SCRFDPipeline::buildHeadShoulderRoi/detectBestFaceInRoi/writeFaceResult` |
 | 修改头姿裁剪和失败语义 | `expandFaceRect`、`clearHeadPose`、`SixDRepNetPipeline::process` |
-| 修改识别时机、注册或重验 | `passesQualityGate/processPending/processIdentified` |
+| 修改识别时机、注册或重验 | `passesQualityGate/updateIdentityIfReady/collectAndIdentify/recheckIdentity` |
 | 新增内部中间数据 | [perception_frame_context.hpp](include/pipeline/perception_frame_context.hpp) |
 | 修改发布字段、交互状态或服务 | [perception_ros_component.cpp](src/perception_ros_component.cpp) 和对应 `trt_infer_msgs` 消息/服务 |
 
