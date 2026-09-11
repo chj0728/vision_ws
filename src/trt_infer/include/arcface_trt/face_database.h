@@ -14,7 +14,7 @@ struct PersonRecord {
   std::string uuid;                     // 人物 UUID v4，数据库主键
   std::string name;                     // 人物姓名，空字符串表示尚未命名
   std::vector<FaceEmbedding> embeddings; // 每个人最多 kMaxEmbeddings 条特征
-  int64_t first_seen{0};                // 首次注册时间，Unix 毫秒；读库时由 UTC 文本转换
+  int64_t first_seen{0};                // 首次注册时间，Unix 毫秒；读库时由系统本地时间文本转换
   int64_t last_seen{0};                 // 最近一次出现时间，Unix 毫秒
   int32_t visit_count{1};               // 注册为 1，每次 touchPerson 调用递增
 };
@@ -31,7 +31,7 @@ struct FaceMatch {
  * @brief SQLite 人脸库，打开时把有效特征加载到内存供快速比较。
  *
  * persons.first_seen/last_seen 和 face_embeddings.captured_at 使用 TEXT，
- * 固定为 UTC 的 YYYY-MM-DD HH:MM:SS.SSS；内存记录仍使用 Unix 毫秒。
+ * 按当前系统时区保存 YYYY-MM-DD HH:MM:SS.SSS；内存记录仍使用 Unix 毫秒。
  * open() 自动事务迁移旧 INTEGER 毫秒字段，失败时回滚并返回 -1。
  * 数据库操作由内部互斥锁保护；isOpen() 仅查询句柄，不能与 open() 并发调用。
  */
@@ -80,10 +80,12 @@ private:
   void initSchema();
   /** @brief 事务重建旧时间列，保留特征、人物、索引、触发器和自增序号。 */
   void migrateTimeColumns();
-  /** @brief 加载有效特征，将 UTC 时间文本转换回内存 Unix 毫秒。 */
+  /** @brief 将无标记的旧 UTC 文本一次性转为系统本地时间，并记录格式标记。 */
+  void migrateToLocalTime();
+  /** @brief 加载有效特征，将系统本地时间文本转换回内存 Unix 毫秒。 */
   void loadFromDB();
   std::string generateUUID() const;
-  /** @brief 获取当前 Unix 毫秒，SQL 写入时统一格式化为 UTC 文本。 */
+  /** @brief 获取当前 Unix 毫秒，SQL 写入时格式化为系统本地时间文本。 */
   int64_t nowMs() const;
 
   mutable std::mutex mu_;

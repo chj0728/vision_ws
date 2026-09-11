@@ -11,8 +11,9 @@
 
 namespace {
 
-// 所有持久化时间使用 UTC，固定格式保留毫秒，避免设备时区变化影响含义。
-constexpr const char *kEpochText = "1970-01-01 00:00:00.000";
+// 新时间列的缺省值为 Unix 起点在当前系统时区的表示，保留毫秒。
+constexpr const char *kEpochDefault =
+    "(strftime('%Y-%m-%d %H:%M:%f',0,'unixepoch','localtime'))";
 
 void executeSql(sqlite3 *db, const std::string &sql) {
   char *error = nullptr;
@@ -39,15 +40,15 @@ std::string createTablesSql(const std::string &persons,
                             const std::string &embeddings) {
   return "CREATE TABLE IF NOT EXISTS " + persons + " ("
          "uuid TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',"
-         "first_seen TEXT NOT NULL DEFAULT '" + kEpochText + "',"
-         "last_seen TEXT NOT NULL DEFAULT '" + kEpochText + "',"
+         "first_seen TEXT NOT NULL DEFAULT " + kEpochDefault + ","
+         "last_seen TEXT NOT NULL DEFAULT " + kEpochDefault + ","
          "visit_count INTEGER NOT NULL DEFAULT 1);"
          "CREATE TABLE IF NOT EXISTS " + embeddings + " ("
          "id INTEGER PRIMARY KEY AUTOINCREMENT,"
          "person_uuid TEXT NOT NULL REFERENCES persons(uuid) ON DELETE CASCADE,"
          "embedding BLOB NOT NULL, yaw REAL NOT NULL DEFAULT 0,"
          "pitch REAL NOT NULL DEFAULT 0, face_conf REAL NOT NULL DEFAULT 0,"
-         "captured_at TEXT NOT NULL DEFAULT '" + kEpochText + "');";
+         "captured_at TEXT NOT NULL DEFAULT " + kEpochDefault + ");";
 }
 
 } // namespace
@@ -89,6 +90,7 @@ int FaceDatabase::open(const std::string &db_path) {
   try {
     initSchema();
     migrateTimeColumns();
+    migrateToLocalTime();
     loadFromDB();
   } catch (const std::exception &error) {
     // 迁移失败时不暴露半初始化的数据库对象，调用方仍通过 -1 判断失败。
@@ -227,19 +229,57 @@ void FaceDatabase::migrateTimeColumns() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 加载人物和有效特征到内存，时间文本转换为原有毫秒接口
+// 加载人物和有效特征到内存，本地时间文本转换为原有毫秒接口
 // ─────────────────────────────────────────────────────────────────────────────
+void FaceDatabase::migrateToLocalTime() {
+  // 上一版本的 TEXT 时间没有时区标记，约定为 UTC；只转换一次。
+  executeSql(db_, "BEGIN IMMEDIATE;");
+  try {
+    executeSql(db_, "CREATE TABLE IF NOT EXISTS face_db_metadata ("
+                    "key TEXT PRIMARY KEY, value TEXT NOT NULL);");
+    bool already_local = false;
+    {
+      auto stmt = prepareSql(db_, "SELECT value FROM face_db_metadata "
+                                 "WHERE key='time_format';");
+      const int rc = sqlite3_step(stmt.get());
+      if (rc == SQLITE_ROW) {
+        const std::string format = reinterpret_cast<const char *>(
+            sqlite3_column_text(stmt.get(), 0));
+        if (format != "system_local_ms") {
+          throw std::runtime_error("[FaceDB] unsupported time format marker");
+        }
+        already_local = true;
+      } else if (rc != SQLITE_DONE) {
+        throw std::runtime_error("[FaceDB] cannot read time format marker");
+      }
+    }
+    if (!already_local) {
+      executeSql(db_,
+          "UPDATE persons SET "
+          "first_seen=strftime('%Y-%m-%d %H:%M:%f',first_seen,'localtime'),"
+          "last_seen=strftime('%Y-%m-%d %H:%M:%f',last_seen,'localtime');"
+          "UPDATE face_embeddings SET "
+          "captured_at=strftime('%Y-%m-%d %H:%M:%f',captured_at,'localtime');"
+          "INSERT INTO face_db_metadata VALUES('time_format','system_local_ms');");
+    }
+    executeSql(db_, "COMMIT;");
+  } catch (...) {
+    sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+    throw;
+  }
+}
+
 void FaceDatabase::loadFromDB() {
   persons_.clear();
 
-  // 第一步：读取人物信息，将 UTC 文本还原为 Unix 毫秒。
+  // 第一步：读取人物信息，将系统本地时间通过 utc 修饰符还原为 Unix 毫秒。
   {
     sqlite3_stmt *stmt = nullptr;
     const char *sql =
         "SELECT uuid, name, "
-        "CAST(strftime('%s',first_seen) AS INTEGER)*1000 + "
+        "CAST(strftime('%s',first_seen,'utc') AS INTEGER)*1000 + "
         "CAST(substr(first_seen,21,3) AS INTEGER), "
-        "CAST(strftime('%s',last_seen) AS INTEGER)*1000 + "
+        "CAST(strftime('%s',last_seen,'utc') AS INTEGER)*1000 + "
         "CAST(substr(last_seen,21,3) AS INTEGER), visit_count FROM persons;";
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
       return;
@@ -367,13 +407,13 @@ std::string FaceDatabase::registerPerson(
   // 一次注册中，人物与全部特征共用事务和同一个毫秒时间。
   sqlite3_exec(db_, "BEGIN;", nullptr, nullptr, nullptr);
 
-  // 插入人物；绑定毫秒值，在 SQL 中转换为 UTC 日期时间文本。
+  // 插入人物；绑定毫秒值，在 SQL 中转换为系统本地日期时间文本。
   {
     sqlite3_stmt *stmt = nullptr;
     const char *sql =
         "INSERT INTO persons(uuid, name, first_seen, last_seen, visit_count) "
-        "VALUES(?,?,strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch'),"
-        "strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch'),1);";
+        "VALUES(?,?,strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch','localtime'),"
+        "strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch','localtime'),1);";
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
       sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
       return "";
@@ -408,7 +448,7 @@ std::string FaceDatabase::registerPerson(
     sqlite3_stmt *stmt = nullptr;
     const char *sql = "INSERT INTO face_embeddings(person_uuid, embedding, "
                       "yaw, pitch, face_conf, captured_at) "
-                      "VALUES(?,?,?,?,?,strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch'));";
+                      "VALUES(?,?,?,?,?,strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch','localtime'));";
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
       sqlite3_bind_text(stmt, 1, uuid.c_str(), -1, SQLITE_STATIC);
       sqlite3_bind_blob(stmt, 2, emb.v, FaceEmbedding::DIM * sizeof(float),
@@ -477,7 +517,7 @@ void FaceDatabase::touchPerson(const std::string &uuid) {
   sqlite3_stmt *stmt = nullptr;
   const char *sql =
       "UPDATE persons SET last_seen="
-      "strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch'), "
+      "strftime('%Y-%m-%d %H:%M:%f',?/1000.0,'unixepoch','localtime'), "
       "visit_count=visit_count+1 WHERE uuid=?;";
   if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
     return;
